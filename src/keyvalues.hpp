@@ -1,6 +1,6 @@
 #pragma once
 
-#include <unordered_map>
+#include <map>
 #include <string>
 #include <string_view>
 #include <fstream>
@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <array>
 #include <exception>
+#include <memory>
 
 class KeyValues
 {
@@ -118,7 +119,7 @@ private:
 	// Used for creation only because we don't have to reconnect child parents to our parent
 	void setKeyValueFast( const kvString &kvValue ) { value = kvValue; }
 
-	std::unordered_multimap< kvString, KeyValues > keyvalues;
+	std::multimap< kvString, std::unique_ptr< KeyValues > > keyvalues;
 
 	// Pointer to string in parent's multimap
 	const kvString *key = nullptr;

@@ -1,5 +1,7 @@
 #include "keyvalues.hpp"
+
 #include <iostream>
+#include <algorithm>
 
 KeyValues &KeyValues::getRoot()
 {
@@ -15,8 +17,8 @@ KeyValues &KeyValues::getRoot()
 
 KeyValues &KeyValues::createKey( const kvString &name )
 {
-	auto it = keyvalues.insert( std::make_pair( kvString( name ), KeyValues() ) );
-	KeyValues &kv = it->second;
+	auto it = keyvalues.insert( std::make_pair( kvString( name ), std::make_unique< KeyValues >() ) );
+	KeyValues &kv = *it->second;
 	kv.key = &it->first;
 	kv.parentKV = this;
 
@@ -43,74 +45,57 @@ void KeyValues::removeKey( const kvString &name )
 
 void KeyValues::removeKey( const kvString &name, size_t index )
 {
-	auto it = keyvalues.find( name );
-	if ( it != keyvalues.end() )
-	{
-		const size_t bucket = keyvalues.bucket( name );
-		const size_t bucketSize = keyvalues.bucket_size( bucket );
+	if ( index >= keyvalues.count( name ) )
+		return;
 
-		if ( index < bucketSize )
-		{
-			auto bucketIt = keyvalues.begin( bucket );
-			std::advance( bucketIt, index );
+	auto range = keyvalues.equal_range( name );
+	auto it = range.first;
+	std::advance( it, index );
 
-			keyvalues.erase( bucketIt );
-		}
-	}
+	keyvalues.erase( it );
 }
 
 KeyValues &KeyValues::get( const kvString &name, size_t index )
 {
-	size_t bucket = keyvalues.bucket( name );
-	auto it = keyvalues.begin( bucket );
+	auto range = keyvalues.equal_range( name );
 
+	auto it = range.first;
 	std::advance( it, index );
-	return it->second;
+
+	return *it->second;
 }
 
 KeyValues &KeyValues::operator[]( const kvString &name )
 {
 	if ( auto it = keyvalues.find( name ); it != keyvalues.end() )
-		return it->second;
+		return *it->second;
 	
 	return createKey( name );
 }
 
 size_t KeyValues::getCount( const kvString &name ) const
 {
-	if (  keyvalues.find( name ) != keyvalues.end() && keyvalues.bucket_count() > 0 )
-		return keyvalues.bucket_size( keyvalues.bucket( name ) );
-	
-	return 0;
+	return keyvalues.count( name );
 }
 
 KeyValues::kvString KeyValues::getKeyValue( const kvString &keyName, size_t index, const kvString &defaultVal /*= ""*/ ) const
 {
-	auto it = keyvalues.find( keyName );
-	if ( it != keyvalues.cend() )
-	{
-		if ( keyvalues.bucket_count() > 0 )
-		{
-			const size_t bucket = keyvalues.bucket( keyName );
-			const size_t bucketSize = keyvalues.bucket_size( bucket );
+	const size_t count = keyvalues.count( keyName );
 
-			if ( index < bucketSize )
-			{
-				auto bucketIt = keyvalues.cbegin( bucket );
-				std::advance( bucketIt, index );
+	if ( index >= count )
+		return defaultVal;
+	
+	auto range = keyvalues.equal_range( keyName );
+	auto it = range.first;
+	std::advance( it, index );
 
-				return bucketIt->second.getValue( defaultVal );
-			}
-		}
-	}
-
-	return defaultVal;
+	return it->second->getValue( defaultVal );
 }
 
 KeyValues::kvString KeyValues::getKeyValue( const kvString &keyName, const kvString &defaultVal /*= ""*/ ) const
 {
 	auto it = keyvalues.find( keyName );
-	return it != keyvalues.end() ? it->second.getValue( defaultVal ) : defaultVal;
+	return it != keyvalues.end() ? it->second->getValue( defaultVal ) : defaultVal;
 }
 
 
@@ -452,10 +437,10 @@ void KeyValues::saveKV( const std::filesystem::path &kvPath )
 
 			for ( auto &kv : sectionKV.keyvalues )
 			{
-				if ( kv.second.isSection() )
-					writeFunc( kv.second, writeFunc );
+				if ( kv.second->isSection() )
+					writeFunc( *kv.second, writeFunc );
 				else
-					writeKV( kv.second );
+					writeKV( *kv.second );
 			}
 
 			writeTabs( sectionKV.getDepth() );
@@ -471,10 +456,10 @@ void KeyValues::saveKV( const std::filesystem::path &kvPath )
 
 	for ( auto &kv : root.keyvalues )
 	{
-		if ( kv.second.isSection() )
-			writeSectionRecursive( kv.second );
+		if ( kv.second->isSection() )
+			writeSectionRecursive( *kv.second );
 		else
-			writeKV( kv.second );
+			writeKV( *kv.second );
 	}
 }
 
@@ -484,8 +469,8 @@ void KeyValues::setKeyValue( const kvString &kvValue )
 	{
 		for ( auto &kv : keyvalues )
 		{
-			kv.second.parentKV = parentKV;
-			--kv.second.depth;
+			kv.second->parentKV = parentKV;
+			--kv.second->depth;
 		}
 	}
 

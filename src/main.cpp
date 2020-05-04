@@ -13,6 +13,9 @@ void SerializeTest()
 	root[ "VertexLitGeneric" ][ "$basetexture" ] = "path/to/VTF";
 	root[ "VertexLitGeneric" ][ "$bumpmap" ] = "path/to/other/VTF";
 
+	KeyValues &vlg = root.createKey( "VertexLitGeneric" );
+	vlg[ "$basetexture" ] = "other/path";
+
 	root.saveKV( "test_serialize.txt" );
 }
 

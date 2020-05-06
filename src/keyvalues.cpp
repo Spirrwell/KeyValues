@@ -3,150 +3,9 @@
 #include <iostream>
 #include <algorithm>
 
-KeyValues &KeyValues::getRoot()
+namespace KV
 {
-	if ( isRoot() )
-		return *this;
-	
-	auto root = parentKV;
-	while ( root->parentKV != nullptr )
-		root = root->parentKV;
-	
-	return *root;
-}
-
-KeyValues &KeyValues::createKey( const kvString &name )
-{
-	auto it = keyvalues.insert( std::make_pair( kvString( name ), std::make_unique< KeyValues >() ) );
-	KeyValues &kv = *it->second;
-	kv.key = &it->first;
-	kv.parentKV = this;
-
-	if ( !isRoot() )
-		kv.depth = depth + 1;
-
-	return kv;
-}
-
-KeyValues &KeyValues::createKeyValue( const kvString &name, const kvString &kvValue )
-{
-	KeyValues &kv = createKey( name );
-	kv.setKeyValueFast( kvValue );
-
-	return kv;
-}
-
-void KeyValues::removeKey( const kvString &name )
-{
-	auto it = keyvalues.find( name );
-	if ( it != keyvalues.end() )
-		keyvalues.erase( it );
-}
-
-void KeyValues::removeKey( const kvString &name, size_t index )
-{
-	if ( index >= keyvalues.count( name ) )
-		return;
-
-	auto range = keyvalues.equal_range( name );
-	auto it = range.first;
-	std::advance( it, index );
-
-	keyvalues.erase( it );
-}
-
-KeyValues &KeyValues::get( const kvString &name, size_t index )
-{
-	auto range = keyvalues.equal_range( name );
-
-	auto it = range.first;
-	std::advance( it, index );
-
-	return *it->second;
-}
-
-KeyValues &KeyValues::operator[]( const kvString &name )
-{
-	if ( auto it = keyvalues.find( name ); it != keyvalues.end() )
-		return *it->second;
-	
-	return createKey( name );
-}
-
-size_t KeyValues::getCount( const kvString &name ) const
-{
-	return keyvalues.count( name );
-}
-
-KeyValues::kvString KeyValues::getKeyValue( const kvString &keyName, size_t index, const kvString &defaultVal /*= ""*/ ) const
-{
-	const size_t count = keyvalues.count( keyName );
-
-	if ( index >= count )
-		return defaultVal;
-	
-	auto range = keyvalues.equal_range( keyName );
-	auto it = range.first;
-	std::advance( it, index );
-
-	return it->second->getValue( defaultVal );
-}
-
-KeyValues::kvString KeyValues::getKeyValue( const kvString &keyName, const kvString &defaultVal /*= ""*/ ) const
-{
-	auto it = keyvalues.find( keyName );
-	return it != keyvalues.end() ? it->second->getValue( defaultVal ) : defaultVal;
-}
-
-
-KeyValues KeyValues::parseKV( const std::filesystem::path &kvPath )
-{
-	const auto fileSize = std::filesystem::file_size( kvPath );
-
-	if ( fileSize == 0 )
-		return {};
-
-	kvIFile file( kvPath, std::ios::binary );
-
-	if ( !file.is_open() )
-		return {};
-	
-	kvString buffer( fileSize, '\0' );
-
-	file.read( buffer.data(), buffer.size() );
-	file.close();
-
-	auto getLine = [ &buffer ]( const size_t line ) -> kvString
-	{
-		size_t startLine = 1;
-		size_t index = 0;
-
-		while ( startLine != line && index < buffer.size() )
-		{
-			if ( buffer[ index ] == '\n' )
-				++startLine;
-			
-			++index;
-		}
-
-		// Uh oh
-		if ( index >= buffer.size() )
-			return "";
-
-		const size_t start = index;
-		while ( ++index < buffer.size() )
-		{
-			if ( buffer[ index ] == '\n' )
-				break;
-		}
-
-		const size_t end = index;
-		kvString line_str( &buffer[ start ], end - start );
-
-		return line_str;
-	};
-
-	auto resolveLineColumn = [ &buffer ]( size_t index ) -> ParseException::LineColumn_t
+	ParseException::LineColumn_t ResolveLineColumn ( const kvString &buffer, size_t index )
 	{
 		constexpr auto UTF8_MB_CONTINUE = 2;
 
@@ -173,306 +32,739 @@ KeyValues KeyValues::parseKV( const std::filesystem::path &kvPath )
 		return ParseException::LineColumn_t{ line, column };
 	};
 
-	// TODO: We shouldn't remove comments because this screws up our line and column numbers for errors
-	auto removeComments = [ &buffer ]()
+	ExpressionEngine::ExpressionEngine( bool useAutomaticDefaults /*= true*/ )
 	{
-		auto stripComment = [ &buffer ]( kvStringView commentBegin, kvStringView commentEnd )
+		if ( useAutomaticDefaults )
 		{
-			for ( size_t index = buffer.find( commentBegin ); index != kvString::npos; index = buffer.find( commentBegin, index ) )
-			{
-				bool inQuote = false;
-				for ( size_t qIndex = 0; qIndex < index; ++qIndex )
-				{
-					const char &c = buffer[ qIndex ];
-					if ( c == '\"' )
-						inQuote = !inQuote;
-					else if ( c == '\n' )
-						inQuote = false;
-				}
+#if _WIN64 || __amd64__
+			setCondition( "x64", true );
+#else
+			setCondition( "x86", true );
+#endif
 
-				if ( !inQuote )
-				{
-					const size_t end = buffer.find( commentEnd, index + commentBegin.size() );
+#ifdef _WIN32
+			setCondition( "WINDOWS", true );
+#endif
 
-					if ( end == kvString::npos )
-						buffer.erase( buffer.begin() + index, buffer.end() );
-					else
-						buffer.erase( index, end - index + commentEnd.size() );
-					
-					index = 0;
-				}
-				else if ( ++index >= buffer.size() )
-					index = kvString::npos;
-			}
+#ifdef __linux__
+			setCondition( "LINUX", true );
+#endif
+
+		}
+	}
+
+	void ExpressionEngine::setCondition( const kvString &condition, bool value )
+	{
+		conditions[ condition ] = value;
+	}
+
+	bool ExpressionEngine::getCondition( const kvString &condition ) const
+	{
+		if ( auto it = conditions.find( condition ); it != conditions.cend() )
+			return it->second;
+
+		return false;
+	}
+
+	ExpressionEngine::ExpressionResult ExpressionEngine::evaluateExpression( const kvString &expression, const size_t offset /*= 0*/ ) const
+	{
+		constexpr const std::array< char, 11 > controls = { '$', '&', '|', '!', '(', ')', '[', ']', '\n', ' ', '\t' };
+		constexpr const std::array< char, 7 > unsupportedOps = { '>', '<', '=', '+', '-', '*', '/' };
+
+		enum class LogicOp
+		{
+			NONE,
+			OR,
+			AND,
+			UNSET // Special case for error handling when parsing
 		};
 
-		stripComment( svSingleLineCommentBegin, svSingleLineCommentEnd );
-		stripComment( svMultiLineCommentBegin, svMultiLineCommentEnd );
-	};
-
-	auto removeCharacter = [ &buffer ]( const char &c )
-	{
-		buffer.erase( std::remove( buffer.begin(), buffer.end(), c ), buffer.end() );
-	};
-
-	auto isWhiteSpace = []( const char &c ) -> bool
-	{
-		for ( const char &other : cWhiteSpace )
+		auto peekChar = [ &expression ]( const size_t index ) -> char
 		{
-			if ( c == other )
-				return true;
-		}
-		
-		return false;
-	};
+			return ( index < expression.size() ) ? expression[ index ] : '\0';
+		};
 
-	auto readUntilNotWhitespace = [ &buffer, &isWhiteSpace ]( size_t index ) -> size_t
-	{
-		while ( index < buffer.size() )
+		auto evaluate = [ & ]( const size_t start, const char expressionEnd, auto &evaluateRecursive ) -> ExpressionResult
 		{
-			if ( !isWhiteSpace( buffer[ index ] ) )
-				return index;
-			
-			++index;
-		}
+			LogicOp currentOp = LogicOp::NONE;
+			std::optional< bool > evaluation;
 
-		return kvString::npos;
-	};
+			bool isNot = false;
 
-	auto readUntilWhiteSpaceOrBrace = [ &buffer, &isWhiteSpace ]( size_t index ) -> size_t
-	{
-		while ( index < buffer.size() )
-		{
-			const char &c = buffer[ index ];
-			if ( isWhiteSpace( c ) || c == '{' || c == '}' )
-				return index;
-		}
-
-		return kvString::npos;
-	};
-
-	auto readUntilEndQuote = [ &buffer, &resolveLineColumn ]( size_t index ) -> size_t
-	{
-		const size_t start = index;
-		while ( index < buffer.size() )
-		{
-			const char &c = buffer[ index ];
-			
-			if ( c == '\"' )
-				return index;
-			else if ( c == '\n' )
-				throw ParseException( "Expected '\"' but got EOL instead", resolveLineColumn( index ) );
-			
-			++index;
-		}
-
-		throw ParseException( "Expected '\"' but got EOF instead", resolveLineColumn( start ) );
-	};
-
-	// Reads next string until we hit control character or whitespace, if string starts with quote, reads until end quote
-	auto readNextString = [ &buffer, &readUntilEndQuote, &isWhiteSpace, &resolveLineColumn ]( size_t index ) -> size_t
-	{
-		const size_t start = index;
-		const char &cStart = buffer[ start ];
-
-		if ( cStart == '\"' )
-			return readUntilEndQuote( start + 1 );
-		else if ( cStart == '{' || cStart == '}' )
-			return start;
-
-		while ( ++index < buffer.size() )
-		{
-			const char &c = buffer[ index ];
-
-			if ( c == '{' || c == '}' || c == '\"' || isWhiteSpace( c ) )
-				return index;
-		}
-
-		throw ParseException( "Expected end of string, got EOF instead", resolveLineColumn( start ) );
-	};
-
-	auto constructKeyName = [ &buffer ]( size_t start, size_t end )
-	{
-		return kvString( buffer, start, end - start );
-	};
-
-	removeComments();
-	removeCharacter( '\r' );
-
-	KeyValues root;
-
-	auto doParse = [ & ]()
-	{
-		auto readSection = [ & ]( KeyValues &currentKV, const size_t startSection, auto &readSubSection ) -> size_t
-		{
-			size_t index = startSection;
-			while ( index != kvString::npos && index < buffer.size() )
+			for ( size_t i = start; i < expression.size(); ++i )
 			{
-				if ( index = readUntilNotWhitespace( index ); index == kvString::npos )
-					break;
-
-				const size_t end = readNextString( index );
-				if ( end == index )
+				if ( expression[ i ] == '\n' )
 				{
-					const char &c = buffer[ end ];
-
-					if ( c == '{' )
-						throw ParseException( "Unexpected start to subsection", resolveLineColumn( end ) );
-					else if ( c == '}' )
-						return end + 1;
+					const kvString errMsg = kvString( "Expected '" ) + expressionEnd + kvString( "', got EOL instead" );
+					throw ParseException( errMsg, ResolveLineColumn( expression, i ) );
 				}
-				else
+				else if ( expression[ i ] == expressionEnd )
 				{
-					const size_t firstStart = ( buffer[ index ] == '\"' ) ? index + 1 : index;
-					const size_t firstEnd = end;
-
-					index = ( buffer[ end ] == '\"' ) ? readUntilNotWhitespace( end + 1 ) : readUntilNotWhitespace( end );
-
-					if ( index == kvString::npos )
-						throw ParseException( "Expected value or new subsection", resolveLineColumn( end ) );
-					
-					const size_t nextEnd = readNextString( index );
-					if ( nextEnd == index )
+					if ( !evaluation.has_value() )
+						throw ParseException( "Expected an expression", ResolveLineColumn( expression, i ) );
+					else if ( currentOp != LogicOp::NONE && currentOp != LogicOp::UNSET )
 					{
-						const char &c = buffer[ nextEnd ];
+						const kvString errMsg = kvString( "Expected primary-expression before '" ) + expressionEnd + kvString( "' token" );
+						throw ParseException( errMsg, ResolveLineColumn( expression, i ) );
+					}
+					else
+						return { evaluation.value(), i };
+				}
+				else if ( expression[ i ] == '!' )
+				{
+					isNot = !isNot;
+					continue;
+				}
+				else if ( expression[ i ] == '(' )
+				{
+					ExpressionResult nextEvaluation = evaluateRecursive( i + 1, ')', evaluateRecursive );
 
-						if ( c == '}' )
-							throw ParseException( "Unexpected end to section", resolveLineColumn( nextEnd ) );
-						else if ( c == '{' )
+					if ( isNot )
+					{
+						nextEvaluation.result = !nextEvaluation.result;
+						isNot = false;
+					}
+
+					switch ( currentOp )
+					{
+						case LogicOp::NONE:
 						{
-							KeyValues &nextKV = currentKV.createKey( constructKeyName( firstStart, firstEnd ) );
-							index = readSubSection( nextKV, nextEnd + 1, readSubSection );
+							evaluation = nextEvaluation.result;
+							break;
+						}
+						case LogicOp::OR:
+						{
+							evaluation = ( evaluation.value() || nextEvaluation.result );
+							break;
+						}
+						case LogicOp::AND:
+						{
+							evaluation = ( evaluation.value() && nextEvaluation.result );
+							break;
+						}
+						case LogicOp::UNSET:
+						{
+							throw ParseException( "Expected logical operator, expression incomplete", ResolveLineColumn( expression, i ) );
+							break;
+						}
+					}
+
+					currentOp = LogicOp::UNSET;
+					i = nextEvaluation.end;
+
+					continue;
+				}
+				else if ( expression[ i ] == '$' )
+				{
+					size_t len = 0;
+
+					for ( size_t j = i + 1; j < expression.size(); ++j )
+					{
+						if ( std::find( controls.begin(), controls.end(), expression[ j ] ) != controls.end() )
+							break;
+
+						++len;
+					}
+
+					if ( len == 0 )
+						throw ParseException( "Expected symbol", ResolveLineColumn( expression, i ) );
+					else
+					{
+						const kvString name = kvString( expression, i + 1, len );
+						const bool condition = ( isNot ) ? !getCondition( name ) : getCondition( name );
+
+						isNot = false;
+
+						switch ( currentOp )
+						{
+							case LogicOp::NONE:
+							{
+								evaluation = condition;
+								break;
+							}
+							case LogicOp::OR:
+							{
+								evaluation = ( evaluation.value() || condition );
+								break;
+							}
+							case LogicOp::AND:
+							{
+								evaluation = ( evaluation.value() && condition );
+								break;
+							}
+							case LogicOp::UNSET:
+							{
+								throw ParseException( "Expected logical operator, expression incomplete", ResolveLineColumn( expression, i ) );
+								break;
+							}
+						}
+
+						currentOp = LogicOp::UNSET;
+						i += len;
+						continue;
+					}
+					
+				}
+				else if ( expression[ i ] == '&' )
+				{
+					if ( peekChar( i + 1 ) != '&' )
+					{
+						throw ParseException( "Bitwise operators not supported", ResolveLineColumn( expression, i ) );
+					}
+					else 
+					{
+						currentOp = LogicOp::AND;
+						++i;
+						continue;
+					}
+				}
+				else if ( expression[ i ] == '|' )
+				{
+					if ( peekChar( i + 1 ) != '|' )
+					{
+						throw ParseException( "Bitwise operators not supported", ResolveLineColumn( expression, i ) );
+					}
+					else 
+					{
+						currentOp = LogicOp::OR;
+						++i;
+						continue;
+					}
+				}
+				else if ( auto it = std::find( unsupportedOps.cbegin(), unsupportedOps.cend(), expression[ i ] ); it != unsupportedOps.cend() )
+				{
+					const kvString errMsg = kvString( "Unsupported operator '" ) + *it + kvString( "'" ) ;
+					throw ParseException( errMsg, ResolveLineColumn( expression, i ) );
+				}
+			}
+
+			throw ParseException( "Expected end of expression", ResolveLineColumn( expression, offset ) );
+		};
+
+		if ( expression[ offset ] != '[' )
+			throw ParseException( "Invalid expression", ResolveLineColumn( expression, offset ) );
+
+		return evaluate( offset + 1, ']', evaluate );
+	}
+
+	KeyValues &KeyValues::getRoot()
+	{
+		if ( isRoot() )
+			return *this;
+		
+		auto root = parentKV;
+		while ( root->parentKV != nullptr )
+			root = root->parentKV;
+		
+		return *root;
+	}
+
+	KeyValues &KeyValues::createKey( const kvString &name )
+	{
+		auto it = keyvalues.insert( std::make_pair( kvString( name ), std::make_unique< KeyValues >() ) );
+		KeyValues &kv = *it->second;
+		kv.key = &it->first;
+		kv.parentKV = this;
+
+		if ( !isRoot() )
+			kv.depth = depth + 1;
+
+		return kv;
+	}
+
+	KeyValues &KeyValues::createKeyValue( const kvString &name, const kvString &kvValue )
+	{
+		KeyValues &kv = createKey( name );
+		kv.setKeyValueFast( kvValue );
+
+		return kv;
+	}
+
+	void KeyValues::removeKey( const kvString &name )
+	{
+		auto it = keyvalues.find( name );
+		if ( it != keyvalues.end() )
+			keyvalues.erase( it );
+	}
+
+	void KeyValues::removeKey( const kvString &name, size_t index )
+	{
+		if ( index >= keyvalues.count( name ) )
+			return;
+
+		auto range = keyvalues.equal_range( name );
+		auto it = range.first;
+		std::advance( it, index );
+
+		keyvalues.erase( it );
+	}
+
+	KeyValues &KeyValues::get( const kvString &name, size_t index )
+	{
+		auto range = keyvalues.equal_range( name );
+
+		auto it = range.first;
+		std::advance( it, index );
+
+		return *it->second;
+	}
+
+	KeyValues &KeyValues::operator[]( const kvString &name )
+	{
+		if ( auto it = keyvalues.find( name ); it != keyvalues.end() )
+			return *it->second;
+		
+		return createKey( name );
+	}
+
+	size_t KeyValues::getCount( const kvString &name ) const
+	{
+		return keyvalues.count( name );
+	}
+
+	kvString KeyValues::getKeyValue( const kvString &keyName, size_t index, const kvString &defaultVal /*= ""*/ ) const
+	{
+		const size_t count = keyvalues.count( keyName );
+
+		if ( index >= count )
+			return defaultVal;
+		
+		auto range = keyvalues.equal_range( keyName );
+		auto it = range.first;
+		std::advance( it, index );
+
+		return it->second->getValue( defaultVal );
+	}
+
+	kvString KeyValues::getKeyValue( const kvString &keyName, const kvString &defaultVal /*= ""*/ ) const
+	{
+		auto it = keyvalues.find( keyName );
+		return it != keyvalues.end() ? it->second->getValue( defaultVal ) : defaultVal;
+	}
+
+
+	KeyValues KeyValues::parseKV( const std::filesystem::path &kvPath )
+	{
+		const auto fileSize = std::filesystem::file_size( kvPath );
+
+		if ( fileSize == 0 )
+			return {};
+
+		kvIFile file( kvPath, std::ios::binary );
+
+		if ( !file.is_open() )
+			return {};
+		
+		kvString buffer( fileSize, '\0' );
+
+		file.read( buffer.data(), buffer.size() );
+		file.close();
+
+		auto getLine = [ &buffer ]( const size_t line ) -> kvString
+		{
+			size_t startLine = 1;
+			size_t index = 0;
+
+			while ( startLine != line && index < buffer.size() )
+			{
+				if ( buffer[ index ] == '\n' )
+					++startLine;
+				
+				++index;
+			}
+
+			// Uh oh
+			if ( index >= buffer.size() )
+				return "";
+
+			const size_t start = index;
+			while ( ++index < buffer.size() )
+			{
+				if ( buffer[ index ] == '\n' )
+					break;
+			}
+
+			const size_t end = index;
+			kvString line_str( &buffer[ start ], end - start );
+
+			return line_str;
+		};
+
+		auto peekChar = [ &buffer ]( const size_t index ) -> char
+		{
+			return ( index < buffer.size() ) ? buffer[ index ] : '\0';
+		};
+
+		auto skipLineComment = [ &buffer ]( const size_t start ) -> size_t
+		{
+			for ( size_t i = start; i < buffer.size(); ++i )
+			{
+				if ( buffer[ i ] == '\n' )
+					return i;
+			}
+
+			return kvString::npos;
+		};
+
+		auto skipMultiLineComment = [ &buffer, &peekChar ]( const size_t start ) -> size_t
+		{
+			for ( size_t i = start; i < buffer.size(); ++i )
+			{
+				if ( buffer[ i ] == '/' && peekChar( i - 1 ) == '*' )
+					return i;
+			}
+
+			return kvString::npos;
+		};
+
+		auto skipSection = [ &buffer, &peekChar, &skipLineComment, &skipMultiLineComment ]( const size_t start ) -> size_t
+		{
+			size_t depth = 0;
+			for ( size_t i = start; i < buffer.size(); ++i )
+			{
+				const char &c = buffer[ i ];
+				if ( c == '\"' )
+				{
+					for ( ++i; i < buffer.size(); ++i )
+					{
+						if ( buffer[ i ] == '\"' )
+							break;
+					}
+
+					continue;
+				}
+				else if ( c == '/' && peekChar( i + 1 ) == '/' )
+				{
+					i = skipLineComment( i );
+					continue;
+				}
+				else if ( c == '/' && peekChar( i + 1 ) == '*' )
+				{
+					i = skipMultiLineComment( i );
+					continue;
+				}
+				else if ( c == '{' )
+				{
+					++depth;
+					continue;
+				}
+				else if ( c == '}' )
+				{
+					if ( depth == 0 )
+						return i;
+					
+					--depth;
+					continue;
+				}
+			}
+
+			return kvString::npos;
+		};
+
+		auto removeCharacter = [ &buffer ]( const char &c )
+		{
+			buffer.erase( std::remove( buffer.begin(), buffer.end(), c ), buffer.end() );
+		};
+
+		auto isWhiteSpace = []( const char &c ) -> bool
+		{
+			for ( const char &other : cWhiteSpace )
+			{
+				if ( c == other )
+					return true;
+			}
+			
+			return false;
+		};
+
+		auto readUntilNotWhitespace = [ &buffer, &isWhiteSpace ]( size_t index ) -> size_t
+		{
+			while ( index < buffer.size() )
+			{
+				if ( !isWhiteSpace( buffer[ index ] ) )
+					return index;
+				
+				++index;
+			}
+
+			return kvString::npos;
+		};
+
+		auto readQuote = [ &buffer ]( const size_t start, kvString &str ) -> size_t
+		{
+			size_t len = 0;
+			size_t index = start + 1;
+			for ( ; index < buffer.size(); ++index )
+			{
+				const char &c = buffer[ index ];
+				if ( c == '"' )
+					break;
+				else if ( c == '\n' )
+					throw ParseException( "Expected '\"' but got EOL instead", ResolveLineColumn( buffer, index ) );
+
+				++len;
+			}
+
+			str = kvString( buffer, start + 1, len );
+			return ( index + 1 >= buffer.size() ) ? kvString::npos : index + 1;
+		};
+
+		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace ]( const size_t start, kvString &str, auto &readStringRecursive ) -> size_t
+		{
+			const char &cStart = buffer[ start ];
+
+			if ( cStart == '\"' )
+				return readQuote( start, str );
+			else if ( cStart == '{' || cStart == '}' || cStart == '[' || cStart == ']' )
+			{
+				str = cStart;
+				const size_t next = start + 1;
+				
+				return ( next >= buffer.size() ) ? kvString::npos : next;
+			}
+			else if ( cStart == '/' && peekChar( start + 1 ) == '/' )
+			{
+				size_t next = skipLineComment( start ) + 1;
+				next = readUntilNotWhitespace( next );
+
+				return readStringRecursive( next, str, readStringRecursive )				;
+			}
+			else if ( cStart == '/' && peekChar( start + 1 ) == '*' )
+			{
+				size_t next = skipMultiLineComment( start ) + 1;
+				next = readUntilNotWhitespace( next );
+
+				return readStringRecursive( next, str, readStringRecursive )				;
+			}
+
+			size_t index = start;
+			size_t len = 0;
+			for ( ; index < buffer.size(); ++index )
+			{
+				const char &c = buffer[ index ];
+				if ( c == '{' || c == '}' || c == '[' || c == '"' || isWhiteSpace( c ) )
+					break;
+				else if ( c == '/' && peekChar( index + 1 ) == '/' )
+				{
+					index = skipLineComment( index );
+					continue;
+				}
+				else if ( c == '/' && peekChar( index + 1 ) == '*' )
+				{
+					index = skipMultiLineComment( index );
+					continue;
+				}
+				
+				++len;
+			}
+
+			str = kvString( buffer, start, len );
+			return ( index >= buffer.size() ) ? kvString::npos : index;
+		};
+
+		removeCharacter( '\r' );
+		KeyValues root;
+
+		auto doParse = [ & ]()
+		{
+			auto readSection = [ & ]( KeyValues &currentKV, const size_t startSection, auto &readSubSection ) -> size_t
+			{
+				std::optional< kvString > key;
+				std::optional< kvString > value;
+				std::optional< ExpressionEngine::ExpressionResult > expressionResult;
+
+				kvString str;
+				size_t index = readUntilNotWhitespace( startSection );
+
+				for ( ; index < buffer.size(); index = readUntilNotWhitespace( index ) )
+				{
+					index = readString( index, str, readString );
+					
+					if ( str == "{" && !key.has_value() )
+						throw ParseException( "Unexpected start to subsection", ResolveLineColumn( buffer, index ) );
+					else if ( str == "}" )
+					{
+						if ( key.has_value() && !value.has_value() )
+							throw ParseException( "Unexpected end to section", ResolveLineColumn( buffer, index ) );
+						else if ( key.has_value() && value.has_value() && ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) ) )
+							currentKV.createKeyValue( key.value(), value.value() );
+
+						return index + 1;
+					}
+					else if ( str == "[" && !key.has_value() )
+						throw ParseException( "Unexpected start of expression", ResolveLineColumn( buffer, index ) );
+					else if ( str == "]" )
+						throw ParseException( "Unexpected expression end ']' token", ResolveLineColumn( buffer, index ) );
+
+					if ( str == "[" )
+					{
+						expressionResult = root.expressionEngine.evaluateExpression( buffer, index - 1 );
+						index = expressionResult->end + 1;
+					}
+					else if ( str == "{" )
+					{
+						if ( expressionResult.has_value() && !expressionResult->result )
+						{
+							if ( size_t skip = skipSection( index ); skip == kvString::npos )
+								throw ParseException( "Expected '}', got EOF instead", ResolveLineColumn( buffer, index ) );
+							else
+							{
+								key = std::nullopt;
+								value = std::nullopt;
+								expressionResult = std::nullopt;
+
+								index = skip;
+							}
+						}
+						else
+						{
+							KeyValues &nextKV = currentKV.createKey( key.value() );
+							index = readSubSection( nextKV, index, readSubSection );
+
+							key = std::nullopt;
+							value = std::nullopt;
+							expressionResult = std::nullopt;
 						}
 					}
 					else
 					{
-						const size_t nextStart = ( buffer[ index ] == '\"' ) ? index + 1 : index;
-						currentKV.createKeyValue( constructKeyName( firstStart, firstEnd ), constructKeyName( nextStart, nextEnd ) );
-						index = ( buffer[ nextEnd ] == '\"' ) ? nextEnd + 1 : nextEnd;
+						if ( !key.has_value() )
+							key = str;
+						else if ( !value.has_value() )
+							value = str;
+						else
+						{
+							if ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) )
+								currentKV.createKeyValue( key.value(), value.value() );
+
+							key = str;
+							value = std::nullopt;
+							expressionResult = std::nullopt;
+						}
 					}
 				}
-			}
 
-			// Note: We're assuming that if start == 0, we started in 'global' space
-			if ( startSection != 0 && index >= buffer.size() )
-				throw ParseException( "Expected '}', got EOF instead", resolveLineColumn( startSection ) );
-			
-			return index;
+				// Note: We're assuming that if start == 0, we started in 'global' space
+				if ( startSection != 0 )
+					throw ParseException( "Expected '}', got EOF instead", ResolveLineColumn( buffer, startSection ) );
+				
+				return index;
+			};
+
+			readSection( root, 0, readSection );
 		};
 
-		readSection( root, 0, readSection );
-	};
-
-	try
-	{
-		doParse();
-	}
-	catch ( const ParseException &e )
-	{
-		std::cout << "[Line: " << e.getLineNumber() << " Column: " << e.getColumn() << "] ";
-		std::cout << e.what() << std::endl << std::endl;
-
-		kvString line = getLine( e.getLineNumber() );
-		size_t tabCount = 0;
-
-		for ( auto it = line.begin(); it != line.end(); ++it )
+		try
 		{
-			if ( *it == '\t' )
-				++tabCount;
+			doParse();
 		}
-
-		line.erase( std::remove( line.begin(), line.end(), '\t' ), line.end() );
-
-		std::cout << line << std::endl;
-		const size_t column = e.getColumn() - tabCount;
-
-		for ( size_t i = 0; i < column; ++i )
-			std::cout << ' ';
-		
-		std::cout << "^\n";
-	}
-
-	return root;
-}
-
-void KeyValues::saveKV( const std::filesystem::path &kvPath )
-{
-	KeyValues &root = getRoot();
-
-	if ( root.isEmpty() )
-		return;
-	
-	kvOFile file( kvPath );
-
-	auto writeTabs = [ &file ]( size_t tabDepth )
-	{
-		if ( tabDepth > 0 )
+		catch ( const ParseException &e )
 		{
-			kvString tabs( tabDepth, '\t' );
-			file << tabs;
-		}
-	};
+			std::cout << "[Line: " << e.getLineNumber() << " Column: " << e.getColumn() << "] ";
+			std::cout << e.what() << std::endl << std::endl;
 
-	auto writeKey = [ & ]( KeyValues &kv )
-	{
-		writeTabs( kv.getDepth() );
-		file << '\"' << kv.getKey() << '\"';
-	};
+			kvString line = getLine( e.getLineNumber() );
+			size_t tabCount = 0;
 
-	auto writeKV = [ & ]( KeyValues &kv )
-	{
-		writeKey( kv );
-		file << ' ' << '\"' << kv.getValue() << '\"' << '\n';
-	};
-
-	auto writeSectionRecursive = [ & ]( KeyValues &section ) -> void
-	{
-		auto writeSection = [ & ]( KeyValues &sectionKV, auto &writeFunc ) -> void
-		{
-			writeKey( sectionKV );
-
-			file << '\n';
-			writeTabs( sectionKV.getDepth() );
-			file << '{' << '\n';
-
-			for ( auto &kv : sectionKV.keyvalues )
+			for ( auto it = line.begin(); it != line.end(); ++it )
 			{
-				if ( kv.second->isSection() )
-					writeFunc( *kv.second, writeFunc );
-				else
-					writeKV( *kv.second );
+				if ( *it == '\t' )
+					++tabCount;
 			}
 
-			writeTabs( sectionKV.getDepth() );
-			file << '}' << '\n';
+			line.erase( std::remove( line.begin(), line.end(), '\t' ), line.end() );
 
-			// Write a new line if it's the end of a 'global' section
-			if ( sectionKV.getDepth() == 0 )
-				file << '\n';
+			std::cout << line << std::endl;
+			const size_t column = e.getColumn() - tabCount;
+
+			for ( size_t i = 0; i < column; ++i )
+				std::cout << ' ';
+			
+			std::cout << "^\n";
+		}
+
+		return root;
+	}
+
+	void KeyValues::saveKV( const std::filesystem::path &kvPath )
+	{
+		KeyValues &root = getRoot();
+
+		if ( root.isEmpty() )
+			return;
+		
+		kvOFile file( kvPath );
+
+		auto writeTabs = [ &file ]( size_t tabDepth )
+		{
+			if ( tabDepth > 0 )
+			{
+				kvString tabs( tabDepth, '\t' );
+				file << tabs;
+			}
 		};
 
-		writeSection( section, writeSection );
-	};
-
-	for ( auto &kv : root.keyvalues )
-	{
-		if ( kv.second->isSection() )
-			writeSectionRecursive( *kv.second );
-		else
-			writeKV( *kv.second );
-	}
-}
-
-void KeyValues::setKeyValue( const kvString &kvValue )
-{
-	if ( isSection() )
-	{
-		for ( auto &kv : keyvalues )
+		auto writeKey = [ & ]( KeyValues &kv )
 		{
-			kv.second->parentKV = parentKV;
-			--kv.second->depth;
+			writeTabs( kv.getDepth() );
+			file << '\"' << kv.getKey() << '\"';
+		};
+
+		auto writeKV = [ & ]( KeyValues &kv )
+		{
+			writeKey( kv );
+			file << ' ' << '\"' << kv.getValue() << '\"' << '\n';
+		};
+
+		auto writeSectionRecursive = [ & ]( KeyValues &section ) -> void
+		{
+			auto writeSection = [ & ]( KeyValues &sectionKV, auto &writeFunc ) -> void
+			{
+				writeKey( sectionKV );
+
+				file << '\n';
+				writeTabs( sectionKV.getDepth() );
+				file << '{' << '\n';
+
+				for ( auto &kv : sectionKV.keyvalues )
+				{
+					if ( kv.second->isSection() )
+						writeFunc( *kv.second, writeFunc );
+					else
+						writeKV( *kv.second );
+				}
+
+				writeTabs( sectionKV.getDepth() );
+				file << '}' << '\n';
+
+				// Write a new line if it's the end of a 'global' section
+				if ( sectionKV.getDepth() == 0 )
+					file << '\n';
+			};
+
+			writeSection( section, writeSection );
+		};
+
+		for ( auto &kv : root.keyvalues )
+		{
+			if ( kv.second->isSection() )
+				writeSectionRecursive( *kv.second );
+			else
+				writeKV( *kv.second );
 		}
 	}
 
-	value = kvValue;
+	void KeyValues::setKeyValue( const kvString &kvValue )
+	{
+		if ( isSection() )
+		{
+			for ( auto &kv : keyvalues )
+			{
+				kv.second->parentKV = parentKV;
+				--kv.second->depth;
+			}
+		}
+
+		value = kvValue;
+	}
 }

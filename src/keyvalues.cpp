@@ -589,7 +589,7 @@ namespace KV
 						else if ( key.has_value() && value.has_value() && ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) ) )
 							currentKV.createKeyValue( key.value(), value.value() );
 
-						return index + 1;
+						return index;
 					}
 					else if ( str == "[" && !key.has_value() )
 						throw ParseException( "Unexpected start of expression", ResolveLineColumn( buffer, index ) );

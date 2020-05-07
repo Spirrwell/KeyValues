@@ -24,6 +24,7 @@ namespace KV
 
 	class ExpressionEngine
 	{
+		friend class KeyValues;
 	public:
 		struct ExpressionResult
 		{
@@ -36,6 +37,7 @@ namespace KV
 		void setCondition( const kvString &condition, bool value );
 		bool getCondition( const kvString &condition ) const;
 
+	protected:
 		ExpressionResult evaluateExpression( const kvString &expression, const size_t offset = 0 ) const;
 
 	private:
@@ -47,9 +49,7 @@ namespace KV
 		constexpr static const std::array< char, 4 > cWhiteSpace = { ' ', '\t', '\n', '\r' };
 
 	public:
-		KeyValues( ExpressionEngine expressionEngine = ExpressionEngine( true ) ) :
-			expressionEngine( expressionEngine )
-		{}
+		KeyValues() = default;
 
 		KeyValues( KeyValues &&other ) noexcept :
 			keyvalues( std::move( other.keyvalues ) ),
@@ -104,7 +104,7 @@ namespace KV
 
 		size_t getDepth() const { return depth; }
 
-		static KeyValues parseKV( const std::filesystem::path &kvPath );
+		static KeyValues parseKV( const std::filesystem::path &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
 		void saveKV( const std::filesystem::path &kvPath );
 
 		void setKeyValue( const kvString &kvValue );
@@ -128,8 +128,6 @@ namespace KV
 
 		KeyValues *parentKV = nullptr;
 		size_t depth = 0;
-
-		const ExpressionEngine expressionEngine;
 	};
 
 	class ParseException : public std::exception

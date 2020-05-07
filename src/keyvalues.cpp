@@ -343,7 +343,7 @@ namespace KV
 	}
 
 
-	KeyValues KeyValues::parseKV( const std::filesystem::path &kvPath )
+	KeyValues KeyValues::parseKV( const std::filesystem::path &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
 	{
 		const auto fileSize = std::filesystem::file_size( kvPath );
 
@@ -644,7 +644,7 @@ namespace KV
 									throw ParseException( "Unexpected start of expression", ResolveLineColumn( buffer, index ) );
 								else
 								{
-									expressionResult = root.expressionEngine.evaluateExpression( buffer, index - 1 );
+									expressionResult = expressionEngine.evaluateExpression( buffer, index - 1 );
 									index = expressionResult->end + 1;
 								}
 

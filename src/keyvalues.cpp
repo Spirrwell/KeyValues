@@ -259,7 +259,7 @@ namespace KV
 		return *root;
 	}
 
-	KeyValues &KeyValues::createKey( const kvString &name )
+	KeyValues &KeyValues::createKey( const kvStringView &name )
 	{
 		auto it = keyvalues.insert( std::make_pair( kvString( name ), std::make_unique< KeyValues >() ) );
 		KeyValues &kv = *it->second;
@@ -272,7 +272,7 @@ namespace KV
 		return kv;
 	}
 
-	KeyValues &KeyValues::createKeyValue( const kvString &name, const kvString &kvValue )
+	KeyValues &KeyValues::createKeyValue( const kvStringView &name, const kvStringView &kvValue )
 	{
 		KeyValues &kv = createKey( name );
 		kv.setKeyValueFast( kvValue );
@@ -587,8 +587,8 @@ namespace KV
 		{
 			auto readSection = [ & ]( KeyValues &currentKV, const size_t startSection, auto &readSubSection ) -> size_t
 			{
-				std::optional< kvString > key;
-				std::optional< kvString > value;
+				std::optional< kvStringView > key;
+				std::optional< kvStringView > value;
 				std::optional< ExpressionEngine::ExpressionResult > expressionResult;
 
 				kvStringView str;

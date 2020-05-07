@@ -67,8 +67,8 @@ namespace KV
 
 		bool hasParent() const noexcept { return !isRoot(); }
 
-		KeyValues &createKey( const kvString &name );
-		KeyValues &createKeyValue( const kvString &name, const kvString &kvValue );
+		KeyValues &createKey( const kvStringView &name );
+		KeyValues &createKeyValue( const kvStringView &name, const kvStringView &kvValue );
 
 		// Beware of dangling references
 		void removeKey( const kvString &name ); // Removes first instance of key
@@ -118,7 +118,7 @@ namespace KV
 		}
 
 		// Used for creation only because we don't have to reconnect child parents to our parent
-		void setKeyValueFast( const kvString &kvValue ) { value = kvValue; }
+		void setKeyValueFast( const kvStringView &kvValue ) { value = kvValue; }
 
 		std::multimap< kvString, std::unique_ptr< KeyValues > > keyvalues;
 

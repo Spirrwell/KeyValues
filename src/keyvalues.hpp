@@ -44,7 +44,7 @@ namespace KV
 
 	class KeyValues
 	{
-		constexpr static const std::array< char, 3 > cWhiteSpace = { ' ', '\t', '\n' };
+		constexpr static const std::array< char, 4 > cWhiteSpace = { ' ', '\t', '\n', '\r' };
 
 	public:
 		KeyValues( ExpressionEngine expressionEngine = ExpressionEngine( true ) ) :

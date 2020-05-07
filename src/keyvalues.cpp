@@ -24,7 +24,7 @@ namespace KV
 				column = 0;
 				++line;
 			}
-			else if ( ( c >> 6 ) != UTF8_MB_CONTINUE )
+			else if ( ( c >> 6 ) != UTF8_MB_CONTINUE && c != '\r' )
 				++column;
 			
 		}
@@ -461,11 +461,6 @@ namespace KV
 			return kvString::npos;
 		};
 
-		auto removeCharacter = [ &buffer ]( const char &c )
-		{
-			buffer.erase( std::remove( buffer.begin(), buffer.end(), c ), buffer.end() );
-		};
-
 		auto isWhiteSpace = []( const char &c ) -> bool
 		{
 			for ( const char &other : cWhiteSpace )
@@ -490,7 +485,7 @@ namespace KV
 			return kvString::npos;
 		};
 
-		auto readQuote = [ &buffer ]( const size_t start, kvString &str ) -> size_t
+		auto readQuote = [ &buffer ]( const size_t start, kvStringView &str ) -> size_t
 		{
 			size_t len = 0;
 			size_t index = start + 1;
@@ -505,19 +500,43 @@ namespace KV
 				++len;
 			}
 
-			str = kvString( buffer, start + 1, len );
+			str = kvStringView( &buffer[ start + 1 ], len );
 			return ( index + 1 >= buffer.size() ) ? kvString::npos : index + 1;
 		};
 
-		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace ]( const size_t start, kvString &str, auto &readStringRecursive ) -> size_t
+		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace ]( const size_t start, kvStringView &str, auto &readStringRecursive ) -> size_t
 		{
+			if ( start >= buffer.size() )
+			{
+				str = "";
+				return kvString::npos;
+			}
+
+			// HACKHACK: This is major hack for the parser to determine if 'str' is a control character or not
+			constexpr const std::array< char, 8 > specialControl = {
+				'\0', '{',
+				'\0', '}',
+				'\0', '[',
+				'\0', ']'
+			};
+
 			const char &cStart = buffer[ start ];
+			auto findSpecialControl = [ &specialControl, &cStart ]() -> size_t
+			{
+				for ( size_t i = 1; i < specialControl.size(); i += 2 )
+				{
+					if ( cStart == specialControl[ i ] )
+						return i;
+				}
+
+				return 0;
+			};
 
 			if ( cStart == '\"' )
 				return readQuote( start, str );
-			else if ( cStart == '{' || cStart == '}' || cStart == '[' || cStart == ']' )
+			else if ( size_t control = findSpecialControl(); control != 0 )
 			{
-				str = cStart;
+				str = kvStringView( &specialControl[ control - 1 ], 2 );
 				const size_t next = start + 1;
 				
 				return ( next >= buffer.size() ) ? kvString::npos : next;
@@ -527,14 +546,14 @@ namespace KV
 				size_t next = skipLineComment( start ) + 1;
 				next = readUntilNotWhitespace( next );
 
-				return readStringRecursive( next, str, readStringRecursive )				;
+				return readStringRecursive( next, str, readStringRecursive );
 			}
 			else if ( cStart == '/' && peekChar( start + 1 ) == '*' )
 			{
 				size_t next = skipMultiLineComment( start ) + 1;
 				next = readUntilNotWhitespace( next );
 
-				return readStringRecursive( next, str, readStringRecursive )				;
+				return readStringRecursive( next, str, readStringRecursive );
 			}
 
 			size_t index = start;
@@ -558,11 +577,10 @@ namespace KV
 				++len;
 			}
 
-			str = kvString( buffer, start, len );
+			str = kvStringView( &buffer[ start ], len );
 			return ( index >= buffer.size() ) ? kvString::npos : index;
 		};
 
-		removeCharacter( '\r' );
 		KeyValues root;
 
 		auto doParse = [ & ]()
@@ -573,60 +591,75 @@ namespace KV
 				std::optional< kvString > value;
 				std::optional< ExpressionEngine::ExpressionResult > expressionResult;
 
-				kvString str;
+				kvStringView str;
 				size_t index = readUntilNotWhitespace( startSection );
 
 				for ( ; index < buffer.size(); index = readUntilNotWhitespace( index ) )
 				{
 					index = readString( index, str, readString );
-					
-					if ( str == "{" && !key.has_value() )
-						throw ParseException( "Unexpected start to subsection", ResolveLineColumn( buffer, index ) );
-					else if ( str == "}" )
-					{
-						if ( key.has_value() && !value.has_value() )
-							throw ParseException( "Unexpected end to section", ResolveLineColumn( buffer, index ) );
-						else if ( key.has_value() && value.has_value() && ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) ) )
-							currentKV.createKeyValue( key.value(), value.value() );
+					const bool isControlCharacter = ( str.size() == 2 && str[ 0 ] == '\0' ); // Note: This is a total garbage hack
 
-						return index;
-					}
-					else if ( str == "[" && !key.has_value() )
-						throw ParseException( "Unexpected start of expression", ResolveLineColumn( buffer, index ) );
-					else if ( str == "]" )
-						throw ParseException( "Unexpected expression end ']' token", ResolveLineColumn( buffer, index ) );
-
-					if ( str == "[" )
+					if ( isControlCharacter )
 					{
-						expressionResult = root.expressionEngine.evaluateExpression( buffer, index - 1 );
-						index = expressionResult->end + 1;
-					}
-					else if ( str == "{" )
-					{
-						if ( expressionResult.has_value() && !expressionResult->result )
+						const char &control = str[ 1 ];
+						switch ( control )
 						{
-							if ( size_t skip = skipSection( index ); skip == kvString::npos )
-								throw ParseException( "Expected '}', got EOF instead", ResolveLineColumn( buffer, index ) );
-							else
+							case '{':
 							{
-								key = std::nullopt;
-								value = std::nullopt;
-								expressionResult = std::nullopt;
+								if ( !key.has_value() )
+									throw ParseException( "Unexpected start to subsection", ResolveLineColumn( buffer, index ) );
+								else if ( expressionResult.has_value() && !expressionResult->result )
+								{
+									if ( size_t skip = skipSection( index ); skip == kvString::npos )
+										throw ParseException( "Expected '}', got EOF instead", ResolveLineColumn( buffer, index ) );
+									else
+										index = skip;
+								}
+								else
+								{
+									KeyValues &nextKV = currentKV.createKey( key.value() );
+									index = readSubSection( nextKV, index, readSubSection );
+								}
 
-								index = skip;
+								key.reset();
+								value.reset();
+								expressionResult.reset();
+
+								break;
 							}
-						}
-						else
-						{
-							KeyValues &nextKV = currentKV.createKey( key.value() );
-							index = readSubSection( nextKV, index, readSubSection );
+							case '}':
+							{
+								if ( key.has_value() && !value.has_value() )
+									throw ParseException( "Unexpected end to section", ResolveLineColumn( buffer, index ) );
+								else if ( key.has_value() && value.has_value() && ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) ) )
+									currentKV.createKeyValue( key.value(), value.value() );
 
-							key = std::nullopt;
-							value = std::nullopt;
-							expressionResult = std::nullopt;
+								return index;
+
+								break;
+							}
+							case '[':
+							{
+								if ( !key.has_value() )
+									throw ParseException( "Unexpected start of expression", ResolveLineColumn( buffer, index ) );
+								else
+								{
+									expressionResult = root.expressionEngine.evaluateExpression( buffer, index - 1 );
+									index = expressionResult->end + 1;
+								}
+
+								break;
+							}
+							case ']':
+							{
+								throw ParseException( "Unexpected expression end ']' token", ResolveLineColumn( buffer, index ) );
+								break;								
+							}
+							default:
+								break;
 						}
 					}
-					else
+					else // Not a control character
 					{
 						if ( !key.has_value() )
 							key = str;
@@ -638,8 +671,8 @@ namespace KV
 								currentKV.createKeyValue( key.value(), value.value() );
 
 							key = str;
-							value = std::nullopt;
-							expressionResult = std::nullopt;
+							value.reset();
+							expressionResult.reset();
 						}
 					}
 				}

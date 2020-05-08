@@ -766,12 +766,12 @@ namespace KV
 				writeTabs( sectionKV.getDepth() );
 				file << '{' << '\n';
 
-				for ( auto &kv : sectionKV.keyvalues )
+				for ( KeyValues &kv : sectionKV )
 				{
-					if ( kv.second->isSection() )
-						writeFunc( *kv.second, writeFunc );
+					if ( kv.isSection() )
+						writeFunc( kv, writeFunc );
 					else
-						writeKV( *kv.second );
+						writeKV( kv );
 				}
 
 				writeTabs( sectionKV.getDepth() );
@@ -785,12 +785,12 @@ namespace KV
 			writeSection( section, writeSection );
 		};
 
-		for ( auto &kv : root.keyvalues )
+		for ( KeyValues &kv : root )
 		{
-			if ( kv.second->isSection() )
-				writeSectionRecursive( *kv.second );
+			if ( kv.isSection() )
+				writeSectionRecursive( kv );
 			else
-				writeKV( *kv.second );
+				writeKV( kv );
 		}
 	}
 

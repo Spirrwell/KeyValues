@@ -49,6 +49,7 @@ namespace KV
 		constexpr static const std::array< char, 4 > cWhiteSpace = { ' ', '\t', '\n', '\r' };
 
 	public:
+
 		KeyValues() = default;
 
 		KeyValues( KeyValues &&other ) noexcept :
@@ -58,6 +59,50 @@ namespace KV
 			parentKV( std::move( other.parentKV ) ),
 			depth( std::move( other.depth ) )
 		{}
+
+		struct kvCompare
+		{
+			// This should ensure that multimap elements are in order of insertion
+			bool operator() ( const kvString &lhs, const kvString &rhs ) const { return false; }
+		};
+
+		struct iterator
+		{
+			using multimap_iterator = std::multimap< kvString, std::unique_ptr< KeyValues >, KeyValues::kvCompare >::iterator;
+
+			iterator( multimap_iterator it ) : it( it ) {}
+			iterator operator++() { ++it; return *this; }
+			bool operator!=( const iterator &other ) const { return ( it != other.it ); }
+
+			KeyValues &operator*() { return *it->second; }
+			const KeyValues &operator*() const { return *it->second; }
+
+		private:
+			multimap_iterator it;
+		};
+
+		struct const_iterator
+		{
+			using const_multimap_iterator = std::multimap< kvString, std::unique_ptr< KeyValues >, KeyValues::kvCompare >::const_iterator;
+
+			const_iterator( const_multimap_iterator it ) : it( it ) {}
+			const_iterator operator++() { ++it; return *this; }
+			bool operator!=( const const_iterator &other ) const { return ( it != other.it ); }
+
+			const KeyValues &operator*() const { return *it->second; }
+
+		private:
+			const_multimap_iterator it;
+		};
+
+		iterator begin() noexcept { return iterator( keyvalues.begin() ); }
+		iterator end() noexcept { return iterator( keyvalues.end() ); }
+
+		const_iterator begin() const noexcept { return const_iterator( keyvalues.cbegin() ); }
+		const_iterator end() const noexcept { return const_iterator( keyvalues.cend() ); }
+
+		const_iterator cbegin() const noexcept { return const_iterator( keyvalues.cbegin() ); }
+		const_iterator cend() const noexcept { return const_iterator( keyvalues.cend() ); }
 
 		KeyValues &getRoot();
 		KeyValues &getParent() { return *parentKV; }
@@ -125,13 +170,7 @@ namespace KV
 		std::optional< kvString > value = std::nullopt;
 
 		KeyValues *parentKV = nullptr;
-		size_t depth = 0;
-
-		struct kvCompare
-		{
-			// This should ensure that multimap elements are in order of insertion
-			bool operator() ( const kvString &lhs, const kvString &rhs ) const { return false; }
-		};
+		size_t depth = 0;		
 
 		std::multimap< kvString, std::unique_ptr< KeyValues >, kvCompare > keyvalues;
 	};

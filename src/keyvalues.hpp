@@ -120,14 +120,20 @@ namespace KV
 		// Used for creation only because we don't have to reconnect child parents to our parent
 		void setKeyValueFast( const kvStringView &kvValue ) { value = kvValue; }
 
-		std::multimap< kvString, std::unique_ptr< KeyValues > > keyvalues;
-
 		// Pointer to string in parent's multimap
 		const kvString *key = nullptr;
 		std::optional< kvString > value = std::nullopt;
 
 		KeyValues *parentKV = nullptr;
 		size_t depth = 0;
+
+		struct kvCompare
+		{
+			// This should ensure that multimap elements are in order of insertion
+			bool operator() ( const kvString &lhs, const kvString &rhs ) const { return false; }
+		};
+
+		std::multimap< kvString, std::unique_ptr< KeyValues >, kvCompare > keyvalues;
 	};
 
 	class ParseException : public std::exception

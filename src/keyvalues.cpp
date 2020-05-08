@@ -680,6 +680,13 @@ namespace KV
 				// Note: We're assuming that if start == 0, we started in 'global' space
 				if ( startSection != 0 )
 					throw ParseException( "Expected '}', got EOF instead", ResolveLineColumn( buffer, startSection ) );
+				else
+				{
+					if ( key.has_value() && !value.has_value() )
+						throw ParseException( "Unexpected end to section", ResolveLineColumn( buffer, buffer.size() - 1 ) );
+					else if ( key.has_value() && value.has_value() && ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) ) )
+						currentKV.createKeyValue( key.value(), value.value() );
+				}
 				
 				return index;
 			};

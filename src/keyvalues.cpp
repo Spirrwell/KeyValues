@@ -343,17 +343,15 @@ namespace KV
 	}
 
 
-	KeyValues KeyValues::parseKV( const std::filesystem::path &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
+	KeyValues KeyValues::parseKVFile( const kvString &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
 	{
-		const auto fileSize = std::filesystem::file_size( kvPath );
-
-		if ( fileSize == 0 )
-			return {};
-
-		kvIFile file( kvPath, std::ios::binary );
+		kvIFile file( kvPath, std::ios::binary | std::ios::ate );
 
 		if ( !file.is_open() )
 			return {};
+
+		const size_t fileSize = file.tellg();
+		file.seekg( std::ios::beg );
 		
 		kvString buffer( fileSize, '\0' );
 
@@ -504,21 +502,21 @@ namespace KV
 			return ( index + 1 >= buffer.size() ) ? kvString::npos : index + 1;
 		};
 
-		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace ]( const size_t start, kvStringView &str, auto &readStringRecursive ) -> size_t
+		// HACKHACK: This is major hack for the parser to determine if 'str' is a control character or not
+		constexpr const std::array< char, 8 > specialControl = {
+			'\0', '{',
+			'\0', '}',
+			'\0', '[',
+			'\0', ']'
+		};
+
+		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace, &specialControl ]( const size_t start, kvStringView &str, auto &readStringRecursive ) -> size_t
 		{
 			if ( start >= buffer.size() )
 			{
 				str = "";
 				return kvString::npos;
 			}
-
-			// HACKHACK: This is major hack for the parser to determine if 'str' is a control character or not
-			constexpr const std::array< char, 8 > specialControl = {
-				'\0', '{',
-				'\0', '}',
-				'\0', '[',
-				'\0', ']'
-			};
 
 			const char &cStart = buffer[ start ];
 			auto findSpecialControl = [ &specialControl, &cStart ]() -> size_t
@@ -726,7 +724,7 @@ namespace KV
 		return root;
 	}
 
-	void KeyValues::saveKV( const std::filesystem::path &kvPath )
+	void KeyValues::saveKV( const kvString &kvPath )
 	{
 		KeyValues &root = getRoot();
 

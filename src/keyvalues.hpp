@@ -6,7 +6,6 @@
 #include <string_view>
 #include <fstream>
 #include <optional>
-#include <filesystem>
 #include <type_traits>
 #include <cstdint>
 #include <array>
@@ -149,8 +148,8 @@ namespace KV
 
 		size_t getDepth() const { return depth; }
 
-		static KeyValues parseKV( const std::filesystem::path &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
-		void saveKV( const std::filesystem::path &kvPath );
+		static KeyValues parseKVFile( const kvString &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
+		void saveKV( const kvString &kvPath );
 
 		void setKeyValue( const kvString &kvValue );
 

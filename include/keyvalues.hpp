@@ -40,7 +40,7 @@ namespace KV
 		bool getCondition( const kvString &condition ) const;
 
 	protected:
-		ExpressionResult evaluateExpression( const kvString &expression, const size_t offset = 0 ) const;
+		ExpressionResult evaluateExpression( const kvStringView &expression, const size_t offset = 0 ) const;
 
 	private:
 		std::unordered_map< std::string, bool > conditions;
@@ -151,8 +151,11 @@ namespace KV
 
 		size_t getDepth() const { return depth; }
 
-		static KeyValues parseKVFile( const kvString &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
-		void saveKV( const kvString &kvPath );
+		static KeyValues parseFromFile( const kvString &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
+		static KeyValues parseFromBuffer( const kvStringView &buffer, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
+
+		void saveToFile( const kvString &kvPath );
+		void saveToBuffer( kvString &out );
 
 		void setKeyValue( const kvString &kvValue );
 

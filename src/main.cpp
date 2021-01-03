@@ -21,13 +21,44 @@ void SerializeTest()
 	KV::KeyValues &vlg = root.createKey( "VertexLitGeneric" );
 	vlg[ "$basetexture" ] = "other/path";
 
-	root.saveKV( "test_serialize.txt" );
+	root.saveToFile( "test_serialize.txt" );
 }
 
-void ParseTest()
+void ParseFileTest()
 {
-	KV::KeyValues root = KV::KeyValues::parseKVFile( "test_serialize.txt" );
-	root.saveKV( "test_serialize_parse.txt" );
+	KV::KeyValues root = KV::KeyValues::parseFromFile( "test_serialize.txt" );
+	root.saveToFile( "test_serialize_parse.txt" );
+}
+
+void ParseStringTest()
+{
+	const std::string test =
+	R"(VertexLitGeneric
+		{
+			$basetexture "path/to/vtf"
+		}
+	)";
+
+	KV::KeyValues root = KV::KeyValues::parseFromBuffer( test );
+
+	std::string buffer;
+	root.saveToBuffer( buffer );
+
+	std::cout << "Parse from string test:" << std::endl;
+	std::cout << buffer << std::endl;
+}
+
+void ParseErrorTest()
+{
+	const std::string test =
+	R"(Hello
+		{
+			"quote" error"
+		}
+	)";
+
+	std::cout << "Parse error check test:" << std::endl;
+	KV::KeyValues::parseFromBuffer( test );
 }
 
 int main()
@@ -39,7 +70,9 @@ int main()
 	KV::setDebugCallback( &DebugCallback );
 
 	SerializeTest();
-	ParseTest();
+	ParseFileTest();
+	ParseStringTest();
+	ParseErrorTest();
 
 	return 0;
 }

@@ -13,7 +13,7 @@ namespace KV
 		debugCallback = callback;
 	}
 
-	ParseException::LineColumn_t ResolveLineColumn ( const kvString &buffer, size_t index )
+	ParseException::LineColumn_t ResolveLineColumn ( const kvStringView &buffer, size_t index )
 	{
 		constexpr auto UTF8_MB_CONTINUE = 2;
 
@@ -74,7 +74,7 @@ namespace KV
 		return false;
 	}
 
-	ExpressionEngine::ExpressionResult ExpressionEngine::evaluateExpression( const kvString &expression, const size_t offset /*= 0*/ ) const
+	ExpressionEngine::ExpressionResult ExpressionEngine::evaluateExpression( const kvStringView &expression, const size_t offset /*= 0*/ ) const
 	{
 		constexpr const std::array< char, 11 > controls = { '$', '&', '|', '!', '(', ')', '[', ']', '\n', ' ', '\t' };
 		constexpr const std::array< char, 7 > unsupportedOps = { '>', '<', '=', '+', '-', '*', '/' };
@@ -351,7 +351,7 @@ namespace KV
 	}
 
 
-	KeyValues KeyValues::parseKVFile( const kvString &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
+	KeyValues KeyValues::parseFromFile( const kvString &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
 	{
 		kvIFile file( kvPath, std::ios::binary | std::ios::ate );
 
@@ -366,6 +366,11 @@ namespace KV
 		file.read( buffer.data(), buffer.size() );
 		file.close();
 
+		return parseFromBuffer( buffer, expressionEngine );
+	}
+
+	KeyValues KeyValues::parseFromBuffer( const kvStringView &buffer, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
+	{
 		auto getLine = [ &buffer ]( const size_t line ) -> kvString
 		{
 			size_t startLine = 1;
@@ -375,7 +380,7 @@ namespace KV
 			{
 				if ( buffer[ index ] == '\n' )
 					++startLine;
-				
+
 				++index;
 			}
 
@@ -458,7 +463,7 @@ namespace KV
 				{
 					if ( depth == 0 )
 						return i;
-					
+
 					--depth;
 					continue;
 				}
@@ -474,7 +479,7 @@ namespace KV
 				if ( c == other )
 					return true;
 			}
-			
+
 			return false;
 		};
 
@@ -484,7 +489,7 @@ namespace KV
 			{
 				if ( !isWhiteSpace( buffer[ index ] ) )
 					return index;
-				
+
 				++index;
 			}
 
@@ -544,7 +549,7 @@ namespace KV
 			{
 				str = kvStringView( &specialControl[ control - 1 ], 2 );
 				const size_t next = start + 1;
-				
+
 				return ( next >= buffer.size() ) ? kvString::npos : next;
 			}
 			else if ( cStart == '/' && peekChar( start + 1 ) == '/' )
@@ -579,7 +584,7 @@ namespace KV
 					index = skipMultiLineComment( index );
 					continue;
 				}
-				
+
 				++len;
 			}
 
@@ -659,7 +664,7 @@ namespace KV
 							case ']':
 							{
 								throw ParseException( "Unexpected expression end ']' token", ResolveLineColumn( buffer, index ) );
-								break;								
+								break;
 							}
 							default:
 								break;
@@ -693,7 +698,7 @@ namespace KV
 					else if ( key.has_value() && value.has_value() && ( !expressionResult.has_value() || ( expressionResult.has_value() && expressionResult->result ) ) )
 						currentKV.createKeyValue( key.value(), value.value() );
 				}
-				
+
 				return index;
 			};
 
@@ -738,7 +743,7 @@ namespace KV
 		return root;
 	}
 
-	void KeyValues::saveKV( const kvString &kvPath )
+	void KeyValues::saveToFile( const kvString &kvPath )
 	{
 		KeyValues &root = getRoot();
 
@@ -746,26 +751,41 @@ namespace KV
 			return;
 		
 		kvOFile file( kvPath );
+		kvString buffer;
 
-		auto writeTabs = [ &file ]( size_t tabDepth )
+		saveToBuffer( buffer );
+
+		file << buffer;
+	}
+
+	void KeyValues::saveToBuffer( kvString &out )
+	{
+		KeyValues &root = getRoot();
+
+		if ( root.isEmpty() )
+			return;
+
+		std::stringstream ss;
+
+		auto writeTabs = [ &ss ]( size_t tabDepth )
 		{
 			if ( tabDepth > 0 )
 			{
 				kvString tabs( tabDepth, '\t' );
-				file << tabs;
+				ss << tabs;
 			}
 		};
 
 		auto writeKey = [ & ]( KeyValues &kv )
 		{
 			writeTabs( kv.getDepth() );
-			file << '\"' << kv.getKey() << '\"';
+			ss << '\"' << kv.getKey() << '\"';
 		};
 
 		auto writeKV = [ & ]( KeyValues &kv )
 		{
 			writeKey( kv );
-			file << ' ' << '\"' << kv.getValue() << '\"' << '\n';
+			ss << ' ' << '\"' << kv.getValue() << '\"' << '\n';
 		};
 
 		auto writeSectionRecursive = [ & ]( KeyValues &section ) -> void
@@ -774,9 +794,9 @@ namespace KV
 			{
 				writeKey( sectionKV );
 
-				file << '\n';
+				ss << '\n';
 				writeTabs( sectionKV.getDepth() );
-				file << '{' << '\n';
+				ss << '{' << '\n';
 
 				for ( KeyValues &kv : sectionKV )
 				{
@@ -787,11 +807,11 @@ namespace KV
 				}
 
 				writeTabs( sectionKV.getDepth() );
-				file << '}' << '\n';
+				ss << '}' << '\n';
 
 				// Write a new line if it's the end of a 'global' section
 				if ( sectionKV.getDepth() == 0 )
-					file << '\n';
+					ss << '\n';
 			};
 
 			writeSection( section, writeSection );
@@ -804,6 +824,8 @@ namespace KV
 			else
 				writeKV( kv );
 		}
+
+		out = ss.str();
 	}
 
 	void KeyValues::setKeyValue( const kvString &kvValue )

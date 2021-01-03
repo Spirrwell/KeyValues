@@ -21,7 +21,7 @@ void SerializeTest()
 
 void ParseTest()
 {
-	KeyValues root = KeyValues::parseKV( "test_serialize.txt" );
+	KeyValues root = KeyValues::parseKVFile( "test_serialize.txt" );
 	root.saveKV( "test_serialize_parse.txt" );
 }
 

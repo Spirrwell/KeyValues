@@ -52,17 +52,17 @@ namespace KV
 		KeyValues() = default;
 
 		KeyValues( KeyValues &&other ) noexcept :
-			keyvalues( std::move( other.keyvalues ) ),
 			key( std::move( other.key ) ),
 			value( std::move( other.value ) ),
 			parentKV( std::move( other.parentKV ) ),
-			depth( std::move( other.depth ) )
+			depth( std::move( other.depth ) ),
+			keyvalues( std::move( other.keyvalues ) )
 		{}
 
 		struct kvCompare
 		{
 			// This should ensure that multimap elements are in order of insertion
-			bool operator() ( const kvString &lhs, const kvString &rhs ) const { return false; }
+			bool operator() ( const kvString&, const kvString& ) const { return false; }
 		};
 
 		struct iterator

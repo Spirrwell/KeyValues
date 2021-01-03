@@ -10,6 +10,10 @@ set( KEYVALUES_INC_FILES include/keyvalues.hpp )
 add_library( keyvalues STATIC ${KEYVALUES_SRC_FILES} ${KEYVALUES_INC_FILES} )
 target_include_directories( keyvalues PUBLIC include/ )
 
+if ( NOT MSVC )
+	target_compile_options( keyvalues PUBLIC -Wall -Wextra -pedantic -Werror )
+endif()
+
 set_target_properties( keyvalues
 	PROPERTIES
 		CXX_STANDARD 17
@@ -23,6 +27,10 @@ if ( ${BUILD_TESTKV} )
 	add_executable( testkv ${TESTKV_SRC_FILES} ${KEYVALUES_INC_FILES} )
 	target_link_libraries( testkv keyvalues )
 	target_include_directories( testkv PUBLIC include/ )
+
+	if ( NOT MSVC )
+		target_compile_options( testkv PUBLIC -Wall -Wextra -pedantic -Werror )
+	endif()
 
 	set_target_properties( testkv
 		PROPERTIES

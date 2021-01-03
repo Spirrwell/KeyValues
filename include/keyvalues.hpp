@@ -195,5 +195,3 @@ namespace KV
 		const LineColumn_t lineColumn;
 	};
 }
-
-using KV::KeyValues;

@@ -9,11 +9,11 @@
 
 void SerializeTest()
 {
-	KeyValues root;
+	KV::KeyValues root;
 	root[ "VertexLitGeneric" ][ "$basetexture" ] = "path/to/VTF";
 	root[ "VertexLitGeneric" ][ "$bumpmap" ] = "path/to/other/VTF";
 
-	KeyValues &vlg = root.createKey( "VertexLitGeneric" );
+	KV::KeyValues &vlg = root.createKey( "VertexLitGeneric" );
 	vlg[ "$basetexture" ] = "other/path";
 
 	root.saveKV( "test_serialize.txt" );
@@ -21,7 +21,7 @@ void SerializeTest()
 
 void ParseTest()
 {
-	KeyValues root = KeyValues::parseKVFile( "test_serialize.txt" );
+	KV::KeyValues root = KV::KeyValues::parseKVFile( "test_serialize.txt" );
 	root.saveKV( "test_serialize_parse.txt" );
 }
 

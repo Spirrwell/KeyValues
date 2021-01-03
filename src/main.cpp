@@ -7,6 +7,11 @@
 #include <Windows.h>
 #endif
 
+void DebugCallback(const KV::kvStringView &output)
+{
+	std::cout << output;
+}
+
 void SerializeTest()
 {
 	KV::KeyValues root;
@@ -30,6 +35,8 @@ int main()
 #ifdef _WIN32
 	SetConsoleOutputCP( CP_UTF8 );
 #endif
+
+	KV::setDebugCallback(&DebugCallback);
 
 	SerializeTest();
 	ParseTest();

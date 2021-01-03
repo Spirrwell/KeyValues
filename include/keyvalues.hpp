@@ -11,6 +11,7 @@
 #include <array>
 #include <exception>
 #include <memory>
+#include <functional>
 
 namespace KV
 {
@@ -20,6 +21,8 @@ namespace KV
 	using kvOFile = std::ofstream;
 	using kvIStream = std::istream;
 	using kvOStream = std::ostream;
+
+	void setDebugCallback(std::function<void(const kvStringView &output)> callback);
 
 	class ExpressionEngine
 	{

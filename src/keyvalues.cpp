@@ -2,9 +2,17 @@
 
 #include <iostream>
 #include <algorithm>
+#include <sstream>
 
 namespace KV
 {
+	static std::function<void(const kvStringView &output)> debugCallback;
+
+	void setDebugCallback(std::function<void(const kvStringView &output)> callback)
+	{
+		debugCallback = callback;
+	}
+
 	ParseException::LineColumn_t ResolveLineColumn ( const kvString &buffer, size_t index )
 	{
 		constexpr auto UTF8_MB_CONTINUE = 2;
@@ -698,27 +706,33 @@ namespace KV
 		}
 		catch ( const ParseException &e )
 		{
-			std::cout << "[Line: " << e.getLineNumber() << " Column: " << e.getColumn() << "] ";
-			std::cout << e.what() << std::endl << std::endl;
-
-			kvString line = getLine( e.getLineNumber() );
-			size_t tabCount = 0;
-
-			for ( auto it = line.begin(); it != line.end(); ++it )
+			if (debugCallback)
 			{
-				if ( *it == '\t' )
-					++tabCount;
+				std::stringstream ss;
+
+				ss << "[Line: " << e.getLineNumber() << " Column: " << e.getColumn() << "] ";
+				ss << e.what() << std::endl << std::endl;
+
+				kvString line = getLine( e.getLineNumber() );
+				size_t tabCount = 0;
+
+				for ( auto it = line.begin(); it != line.end(); ++it )
+				{
+					if ( *it == '\t' )
+						++tabCount;
+				}
+
+				line.erase( std::remove( line.begin(), line.end(), '\t' ), line.end() );
+
+				ss << line << std::endl;
+				const size_t column = e.getColumn() - tabCount;
+
+				for ( size_t i = 0; i < column; ++i )
+					ss << ' ';
+
+				ss << "^\n";
+				debugCallback(ss.str());
 			}
-
-			line.erase( std::remove( line.begin(), line.end(), '\t' ), line.end() );
-
-			std::cout << line << std::endl;
-			const size_t column = e.getColumn() - tabCount;
-
-			for ( size_t i = 0; i < column; ++i )
-				std::cout << ' ';
-			
-			std::cout << "^\n";
 		}
 
 		return root;

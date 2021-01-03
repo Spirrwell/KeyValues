@@ -19,7 +19,7 @@ namespace KV
 
 		if ( index == kvString::npos || index >= buffer.size() )
 			{};
-		
+
 		size_t line = 1;
 		size_t column = 0;
 
@@ -34,7 +34,7 @@ namespace KV
 			}
 			else if ( ( c >> 6 ) != UTF8_MB_CONTINUE && c != '\r' )
 				++column;
-			
+
 		}
 
 		return ParseException::LineColumn_t{ line, column };
@@ -211,7 +211,7 @@ namespace KV
 						i += len;
 						continue;
 					}
-					
+
 				}
 				else if ( expression[ i ] == '&' )
 				{
@@ -219,7 +219,7 @@ namespace KV
 					{
 						throw ParseException( "Bitwise operators not supported", ResolveLineColumn( expression, i ) );
 					}
-					else 
+					else
 					{
 						currentOp = LogicOp::AND;
 						++i;
@@ -232,7 +232,7 @@ namespace KV
 					{
 						throw ParseException( "Bitwise operators not supported", ResolveLineColumn( expression, i ) );
 					}
-					else 
+					else
 					{
 						currentOp = LogicOp::OR;
 						++i;
@@ -259,11 +259,11 @@ namespace KV
 	{
 		if ( isRoot() )
 			return *this;
-		
+
 		auto root = parentKV;
 		while ( root->parentKV != nullptr )
 			root = root->parentKV;
-		
+
 		return *root;
 	}
 
@@ -321,7 +321,7 @@ namespace KV
 	{
 		if ( auto it = keyvalues.find( name ); it != keyvalues.end() )
 			return *it->second;
-		
+
 		return createKey( name );
 	}
 
@@ -336,7 +336,7 @@ namespace KV
 
 		if ( index >= count )
 			return defaultVal;
-		
+
 		auto range = keyvalues.equal_range( keyName );
 		auto it = range.first;
 		std::advance( it, index );
@@ -360,7 +360,7 @@ namespace KV
 
 		const size_t fileSize = file.tellg();
 		file.seekg( std::ios::beg );
-		
+
 		kvString buffer( fileSize, '\0' );
 
 		file.read( buffer.data(), buffer.size() );
@@ -749,7 +749,7 @@ namespace KV
 
 		if ( root.isEmpty() )
 			return;
-		
+
 		kvOFile file( kvPath );
 		kvString buffer;
 

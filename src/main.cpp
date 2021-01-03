@@ -36,7 +36,7 @@ int main()
 	SetConsoleOutputCP( CP_UTF8 );
 #endif
 
-	KV::setDebugCallback(&DebugCallback);
+	KV::setDebugCallback( &DebugCallback );
 
 	SerializeTest();
 	ParseTest();

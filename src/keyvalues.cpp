@@ -6,9 +6,9 @@
 
 namespace KV
 {
-	static std::function<void(const kvStringView &output)> debugCallback;
+	static std::function< void( const kvStringView &output ) > debugCallback;
 
-	void setDebugCallback(std::function<void(const kvStringView &output)> callback)
+	void setDebugCallback( std::function< void( const kvStringView &output ) > callback )
 	{
 		debugCallback = callback;
 	}

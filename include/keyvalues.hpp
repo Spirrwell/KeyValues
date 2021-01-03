@@ -22,7 +22,7 @@ namespace KV
 	using kvIStream = std::istream;
 	using kvOStream = std::ostream;
 
-	void setDebugCallback(std::function<void(const kvStringView &output)> callback);
+	void setDebugCallback( std::function< void( const kvStringView &output ) > callback );
 
 	class ExpressionEngine
 	{

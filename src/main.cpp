@@ -7,7 +7,7 @@
 #include <Windows.h>
 #endif
 
-void DebugCallback(const KV::kvStringView &output)
+void DebugCallback( const std::string_view &output )
 {
 	std::cout << output;
 }

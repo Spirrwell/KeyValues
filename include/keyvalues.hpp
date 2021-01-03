@@ -15,14 +15,7 @@
 
 namespace KV
 {
-	using kvString = std::string;
-	using kvStringView = std::string_view;
-	using kvIFile = std::ifstream;
-	using kvOFile = std::ofstream;
-	using kvIStream = std::istream;
-	using kvOStream = std::ostream;
-
-	void setDebugCallback( std::function< void( const kvStringView &output ) > callback );
+	void setDebugCallback( std::function< void( const std::string_view &output ) > callback );
 
 	class ExpressionEngine
 	{
@@ -36,11 +29,11 @@ namespace KV
 
 		ExpressionEngine( bool useAutomaticDefaults = true );
 
-		void setCondition( const kvString &condition, bool value );
-		bool getCondition( const kvString &condition ) const;
+		void setCondition( const std::string &condition, bool value );
+		bool getCondition( const std::string &condition ) const;
 
 	protected:
-		ExpressionResult evaluateExpression( const kvStringView &expression, const size_t offset = 0 ) const;
+		ExpressionResult evaluateExpression( const std::string_view &expression, const size_t offset = 0 ) const;
 
 	private:
 		std::unordered_map< std::string, bool > conditions;
@@ -65,12 +58,12 @@ namespace KV
 		struct kvCompare
 		{
 			// This should ensure that multimap elements are in order of insertion
-			bool operator() ( const kvString&, const kvString& ) const { return false; }
+			bool operator() ( const std::string&, const std::string& ) const { return false; }
 		};
 
 		struct iterator
 		{
-			using multimap_iterator = std::multimap< kvString, std::unique_ptr< KeyValues >, KeyValues::kvCompare >::iterator;
+			using multimap_iterator = std::multimap< std::string, std::unique_ptr< KeyValues >, KeyValues::kvCompare >::iterator;
 
 			iterator( multimap_iterator it ) : it( it ) {}
 			iterator operator++() { ++it; return *this; }
@@ -85,7 +78,7 @@ namespace KV
 
 		struct const_iterator
 		{
-			using const_multimap_iterator = std::multimap< kvString, std::unique_ptr< KeyValues >, KeyValues::kvCompare >::const_iterator;
+			using const_multimap_iterator = std::multimap< std::string, std::unique_ptr< KeyValues >, KeyValues::kvCompare >::const_iterator;
 
 			const_iterator( const_multimap_iterator it ) : it( it ) {}
 			const_iterator operator++() { ++it; return *this; }
@@ -114,18 +107,18 @@ namespace KV
 
 		bool hasParent() const noexcept { return !isRoot(); }
 
-		KeyValues &createKey( const kvStringView &name );
-		KeyValues &createKeyValue( const kvStringView &name, const kvStringView &kvValue );
+		KeyValues &createKey( const std::string_view &name );
+		KeyValues &createKeyValue( const std::string_view &name, const std::string_view &kvValue );
 
 		// Beware of dangling references
-		void removeKey( const kvString &name ); // Removes first instance of key
-		void removeKey( const kvString &name, size_t index ); // Removes key at index if it exists
+		void removeKey( const std::string &name ); // Removes first instance of key
+		void removeKey( const std::string &name, size_t index ); // Removes key at index if it exists
 
-		KeyValues &get( const kvString &name, size_t index ); // Please ensure getCount( name ) > 0 and index < getCount( name )
-		KeyValues &operator[]( const kvString &name );
+		KeyValues &get( const std::string &name, size_t index ); // Please ensure getCount( name ) > 0 and index < getCount( name )
+		KeyValues &operator[]( const std::string &name );
 
 		KeyValues &operator=( const char *kvValue ) { setKeyValue( kvValue ); return *this; }
-		KeyValues &operator=( const kvString &kvValue ) { setKeyValue( kvValue ); return *this; }
+		KeyValues &operator=( const std::string &kvValue ) { setKeyValue( kvValue ); return *this; }
 		KeyValues &operator=( bool kvValue ) { setKeyValue( toString( kvValue ) ); return *this; }
 		KeyValues &operator=( uint8_t kvValue ) { setKeyValue( toString( kvValue ) ); return *this; }
 		KeyValues &operator=( uint16_t kvValue ) { setKeyValue( toString( kvValue ) ); return *this; }
@@ -139,45 +132,45 @@ namespace KV
 		KeyValues &operator=( double kvValue ) { setKeyValue( toString( kvValue ) ); return *this; }
 
 		// Returns number of keys of the specified name we have
-		size_t getCount( const kvString &name ) const;
+		size_t getCount( const std::string &name ) const;
 
 		bool isSection() const { return !value.has_value(); }
 		
-		kvString getKey() const { return ( key ) ? *key : kvString(); }
-		kvString getValue( const kvString &defaultVal = kvString() ) const { return ( value.value_or( defaultVal ) ); }
+		std::string getKey() const { return ( key ) ? *key : std::string(); }
+		std::string getValue( const std::string &defaultVal = std::string() ) const { return ( value.value_or( defaultVal ) ); }
 
-		kvString getKeyValue( const kvString &keyName, size_t index, const kvString &defaultVal = kvString() ) const;
-		kvString getKeyValue( const kvString &keyName, const kvString &defaultVal = kvString() ) const;
+		std::string getKeyValue( const std::string &keyName, size_t index, const std::string &defaultVal = std::string() ) const;
+		std::string getKeyValue( const std::string &keyName, const std::string &defaultVal = std::string() ) const;
 
 		size_t getDepth() const { return depth; }
 
-		static KeyValues parseFromFile( const kvString &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
-		static KeyValues parseFromBuffer( const kvStringView &buffer, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
+		static KeyValues parseFromFile( const std::string &kvPath, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
+		static KeyValues parseFromBuffer( const std::string_view &buffer, ExpressionEngine expressionEngine = ExpressionEngine( true ) );
 
-		void saveToFile( const kvString &kvPath );
-		void saveToBuffer( kvString &out );
+		void saveToFile( const std::string &kvPath );
+		void saveToBuffer( std::string &out );
 
-		void setKeyValue( const kvString &kvValue );
+		void setKeyValue( const std::string &kvValue );
 
 	private:
 
 		template< typename T >
-		kvString toString( T val )
+		std::string toString( T val )
 		{
 			return std::to_string( val );
 		}
 
 		// Used for creation only because we don't have to reconnect child parents to our parent
-		void setKeyValueFast( const kvStringView &kvValue ) { value = kvValue; }
+		void setKeyValueFast( const std::string_view &kvValue ) { value = kvValue; }
 
 		// Pointer to string in parent's multimap
-		const kvString *key = nullptr;
-		std::optional< kvString > value = std::nullopt;
+		const std::string *key = nullptr;
+		std::optional< std::string > value = std::nullopt;
 
 		KeyValues *parentKV = nullptr;
 		size_t depth = 0;		
 
-		std::multimap< kvString, std::unique_ptr< KeyValues >, kvCompare > keyvalues;
+		std::multimap< std::string, std::unique_ptr< KeyValues >, kvCompare > keyvalues;
 	};
 
 	class ParseException : public std::exception

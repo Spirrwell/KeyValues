@@ -6,18 +6,18 @@
 
 namespace KV
 {
-	static std::function< void( const kvStringView &output ) > debugCallback;
+	static std::function< void( const std::string_view &output ) > debugCallback;
 
-	void setDebugCallback( std::function< void( const kvStringView &output ) > callback )
+	void setDebugCallback( std::function< void( const std::string_view &output ) > callback )
 	{
 		debugCallback = callback;
 	}
 
-	ParseException::LineColumn_t ResolveLineColumn ( const kvStringView &buffer, size_t index )
+	ParseException::LineColumn_t ResolveLineColumn ( const std::string_view &buffer, size_t index )
 	{
 		constexpr auto UTF8_MB_CONTINUE = 2;
 
-		if ( index == kvString::npos || index >= buffer.size() )
+		if ( index == std::string::npos || index >= buffer.size() )
 			{};
 
 		size_t line = 1;
@@ -61,12 +61,12 @@ namespace KV
 		}
 	}
 
-	void ExpressionEngine::setCondition( const kvString &condition, bool value )
+	void ExpressionEngine::setCondition( const std::string &condition, bool value )
 	{
 		conditions[ condition ] = value;
 	}
 
-	bool ExpressionEngine::getCondition( const kvString &condition ) const
+	bool ExpressionEngine::getCondition( const std::string &condition ) const
 	{
 		if ( auto it = conditions.find( condition ); it != conditions.cend() )
 			return it->second;
@@ -74,7 +74,7 @@ namespace KV
 		return false;
 	}
 
-	ExpressionEngine::ExpressionResult ExpressionEngine::evaluateExpression( const kvStringView &expression, const size_t offset /*= 0*/ ) const
+	ExpressionEngine::ExpressionResult ExpressionEngine::evaluateExpression( const std::string_view &expression, const size_t offset /*= 0*/ ) const
 	{
 		constexpr const std::array< char, 11 > controls = { '$', '&', '|', '!', '(', ')', '[', ']', '\n', ' ', '\t' };
 		constexpr const std::array< char, 7 > unsupportedOps = { '>', '<', '=', '+', '-', '*', '/' };
@@ -103,7 +103,7 @@ namespace KV
 			{
 				if ( expression[ i ] == '\n' )
 				{
-					const kvString errMsg = kvString( "Expected '" ) + expressionEnd + kvString( "', got EOL instead" );
+					const std::string errMsg = std::string( "Expected '" ) + expressionEnd + std::string( "', got EOL instead" );
 					throw ParseException( errMsg, ResolveLineColumn( expression, i ) );
 				}
 				else if ( expression[ i ] == expressionEnd )
@@ -112,7 +112,7 @@ namespace KV
 						throw ParseException( "Expected an expression", ResolveLineColumn( expression, i ) );
 					else if ( currentOp != LogicOp::NONE && currentOp != LogicOp::UNSET )
 					{
-						const kvString errMsg = kvString( "Expected primary-expression before '" ) + expressionEnd + kvString( "' token" );
+						const std::string errMsg = std::string( "Expected primary-expression before '" ) + expressionEnd + std::string( "' token" );
 						throw ParseException( errMsg, ResolveLineColumn( expression, i ) );
 					}
 					else
@@ -178,7 +178,7 @@ namespace KV
 						throw ParseException( "Expected symbol", ResolveLineColumn( expression, i ) );
 					else
 					{
-						const kvString name = kvString( expression, i + 1, len );
+						const std::string name = std::string( expression, i + 1, len );
 						const bool condition = ( isNot ) ? !getCondition( name ) : getCondition( name );
 
 						isNot = false;
@@ -241,7 +241,7 @@ namespace KV
 				}
 				else if ( auto it = std::find( unsupportedOps.cbegin(), unsupportedOps.cend(), expression[ i ] ); it != unsupportedOps.cend() )
 				{
-					const kvString errMsg = kvString( "Unsupported operator '" ) + *it + kvString( "'" ) ;
+					const std::string errMsg = std::string( "Unsupported operator '" ) + *it + std::string( "'" ) ;
 					throw ParseException( errMsg, ResolveLineColumn( expression, i ) );
 				}
 			}
@@ -267,9 +267,9 @@ namespace KV
 		return *root;
 	}
 
-	KeyValues &KeyValues::createKey( const kvStringView &name )
+	KeyValues &KeyValues::createKey( const std::string_view &name )
 	{
-		auto it = keyvalues.insert( std::make_pair( kvString( name ), std::make_unique< KeyValues >() ) );
+		auto it = keyvalues.insert( std::make_pair( std::string( name ), std::make_unique< KeyValues >() ) );
 		KeyValues &kv = *it->second;
 		kv.key = &it->first;
 		kv.parentKV = this;
@@ -280,7 +280,7 @@ namespace KV
 		return kv;
 	}
 
-	KeyValues &KeyValues::createKeyValue( const kvStringView &name, const kvStringView &kvValue )
+	KeyValues &KeyValues::createKeyValue( const std::string_view &name, const std::string_view &kvValue )
 	{
 		KeyValues &kv = createKey( name );
 		kv.setKeyValueFast( kvValue );
@@ -288,14 +288,14 @@ namespace KV
 		return kv;
 	}
 
-	void KeyValues::removeKey( const kvString &name )
+	void KeyValues::removeKey( const std::string &name )
 	{
 		auto it = keyvalues.find( name );
 		if ( it != keyvalues.end() )
 			keyvalues.erase( it );
 	}
 
-	void KeyValues::removeKey( const kvString &name, size_t index )
+	void KeyValues::removeKey( const std::string &name, size_t index )
 	{
 		if ( index >= keyvalues.count( name ) )
 			return;
@@ -307,7 +307,7 @@ namespace KV
 		keyvalues.erase( it );
 	}
 
-	KeyValues &KeyValues::get( const kvString &name, size_t index )
+	KeyValues &KeyValues::get( const std::string &name, size_t index )
 	{
 		auto range = keyvalues.equal_range( name );
 
@@ -317,7 +317,7 @@ namespace KV
 		return *it->second;
 	}
 
-	KeyValues &KeyValues::operator[]( const kvString &name )
+	KeyValues &KeyValues::operator[]( const std::string &name )
 	{
 		if ( auto it = keyvalues.find( name ); it != keyvalues.end() )
 			return *it->second;
@@ -325,12 +325,12 @@ namespace KV
 		return createKey( name );
 	}
 
-	size_t KeyValues::getCount( const kvString &name ) const
+	size_t KeyValues::getCount( const std::string &name ) const
 	{
 		return keyvalues.count( name );
 	}
 
-	kvString KeyValues::getKeyValue( const kvString &keyName, size_t index, const kvString &defaultVal /*= ""*/ ) const
+	std::string KeyValues::getKeyValue( const std::string &keyName, size_t index, const std::string &defaultVal /*= ""*/ ) const
 	{
 		const size_t count = keyvalues.count( keyName );
 
@@ -344,16 +344,16 @@ namespace KV
 		return it->second->getValue( defaultVal );
 	}
 
-	kvString KeyValues::getKeyValue( const kvString &keyName, const kvString &defaultVal /*= ""*/ ) const
+	std::string KeyValues::getKeyValue( const std::string &keyName, const std::string &defaultVal /*= ""*/ ) const
 	{
 		auto it = keyvalues.find( keyName );
 		return it != keyvalues.end() ? it->second->getValue( defaultVal ) : defaultVal;
 	}
 
 
-	KeyValues KeyValues::parseFromFile( const kvString &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
+	KeyValues KeyValues::parseFromFile( const std::string &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
 	{
-		kvIFile file( kvPath, std::ios::binary | std::ios::ate );
+		std::ifstream file( kvPath, std::ios::binary | std::ios::ate );
 
 		if ( !file.is_open() )
 			return {};
@@ -361,7 +361,7 @@ namespace KV
 		const size_t fileSize = file.tellg();
 		file.seekg( std::ios::beg );
 
-		kvString buffer( fileSize, '\0' );
+		std::string buffer( fileSize, '\0' );
 
 		file.read( buffer.data(), buffer.size() );
 		file.close();
@@ -369,9 +369,9 @@ namespace KV
 		return parseFromBuffer( buffer, expressionEngine );
 	}
 
-	KeyValues KeyValues::parseFromBuffer( const kvStringView &buffer, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
+	KeyValues KeyValues::parseFromBuffer( const std::string_view &buffer, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
 	{
-		auto getLine = [ &buffer ]( const size_t line ) -> kvString
+		auto getLine = [ &buffer ]( const size_t line ) -> std::string
 		{
 			size_t startLine = 1;
 			size_t index = 0;
@@ -396,7 +396,7 @@ namespace KV
 			}
 
 			const size_t end = index;
-			kvString line_str( &buffer[ start ], end - start );
+			std::string line_str( &buffer[ start ], end - start );
 
 			return line_str;
 		};
@@ -414,7 +414,7 @@ namespace KV
 					return i;
 			}
 
-			return kvString::npos;
+			return std::string::npos;
 		};
 
 		auto skipMultiLineComment = [ &buffer, &peekChar ]( const size_t start ) -> size_t
@@ -425,7 +425,7 @@ namespace KV
 					return i;
 			}
 
-			return kvString::npos;
+			return std::string::npos;
 		};
 
 		auto skipSection = [ &buffer, &peekChar, &skipLineComment, &skipMultiLineComment ]( const size_t start ) -> size_t
@@ -469,7 +469,7 @@ namespace KV
 				}
 			}
 
-			return kvString::npos;
+			return std::string::npos;
 		};
 
 		auto isWhiteSpace = []( const char &c ) -> bool
@@ -493,10 +493,10 @@ namespace KV
 				++index;
 			}
 
-			return kvString::npos;
+			return std::string::npos;
 		};
 
-		auto readQuote = [ &buffer ]( const size_t start, kvStringView &str ) -> size_t
+		auto readQuote = [ &buffer ]( const size_t start, std::string_view &str ) -> size_t
 		{
 			size_t len = 0;
 			size_t index = start + 1;
@@ -511,8 +511,8 @@ namespace KV
 				++len;
 			}
 
-			str = kvStringView( &buffer[ start + 1 ], len );
-			return ( index + 1 >= buffer.size() ) ? kvString::npos : index + 1;
+			str = std::string_view( &buffer[ start + 1 ], len );
+			return ( index + 1 >= buffer.size() ) ? std::string::npos : index + 1;
 		};
 
 		// HACKHACK: This is major hack for the parser to determine if 'str' is a control character or not
@@ -523,12 +523,12 @@ namespace KV
 			'\0', ']'
 		};
 
-		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace, &specialControl ]( const size_t start, kvStringView &str, auto &readStringRecursive ) -> size_t
+		auto readString = [ &buffer, &readQuote, &isWhiteSpace, &peekChar, &skipLineComment, &skipMultiLineComment, &readUntilNotWhitespace, &specialControl ]( const size_t start, std::string_view &str, auto &readStringRecursive ) -> size_t
 		{
 			if ( start >= buffer.size() )
 			{
 				str = "";
-				return kvString::npos;
+				return std::string::npos;
 			}
 
 			const char &cStart = buffer[ start ];
@@ -547,10 +547,10 @@ namespace KV
 				return readQuote( start, str );
 			else if ( size_t control = findSpecialControl(); control != 0 )
 			{
-				str = kvStringView( &specialControl[ control - 1 ], 2 );
+				str = std::string_view( &specialControl[ control - 1 ], 2 );
 				const size_t next = start + 1;
 
-				return ( next >= buffer.size() ) ? kvString::npos : next;
+				return ( next >= buffer.size() ) ? std::string::npos : next;
 			}
 			else if ( cStart == '/' && peekChar( start + 1 ) == '/' )
 			{
@@ -588,8 +588,8 @@ namespace KV
 				++len;
 			}
 
-			str = kvStringView( &buffer[ start ], len );
-			return ( index >= buffer.size() ) ? kvString::npos : index;
+			str = std::string_view( &buffer[ start ], len );
+			return ( index >= buffer.size() ) ? std::string::npos : index;
 		};
 
 		KeyValues root;
@@ -598,11 +598,11 @@ namespace KV
 		{
 			auto readSection = [ & ]( KeyValues &currentKV, const size_t startSection, auto &readSubSection ) -> size_t
 			{
-				std::optional< kvStringView > key;
-				std::optional< kvStringView > value;
+				std::optional< std::string_view > key;
+				std::optional< std::string_view > value;
 				std::optional< ExpressionEngine::ExpressionResult > expressionResult;
 
-				kvStringView str;
+				std::string_view str;
 				size_t index = readUntilNotWhitespace( startSection );
 
 				for ( ; index < buffer.size(); index = readUntilNotWhitespace( index ) )
@@ -621,7 +621,7 @@ namespace KV
 									throw ParseException( "Unexpected start to subsection", ResolveLineColumn( buffer, index ) );
 								else if ( expressionResult.has_value() && !expressionResult->result )
 								{
-									if ( size_t skip = skipSection( index ); skip == kvString::npos )
+									if ( size_t skip = skipSection( index ); skip == std::string::npos )
 										throw ParseException( "Expected '}', got EOF instead", ResolveLineColumn( buffer, index ) );
 									else
 										index = skip;
@@ -718,7 +718,7 @@ namespace KV
 				ss << "[Line: " << e.getLineNumber() << " Column: " << e.getColumn() << "] ";
 				ss << e.what() << std::endl << std::endl;
 
-				kvString line = getLine( e.getLineNumber() );
+				std::string line = getLine( e.getLineNumber() );
 				size_t tabCount = 0;
 
 				for ( auto it = line.begin(); it != line.end(); ++it )
@@ -743,22 +743,22 @@ namespace KV
 		return root;
 	}
 
-	void KeyValues::saveToFile( const kvString &kvPath )
+	void KeyValues::saveToFile( const std::string &kvPath )
 	{
 		KeyValues &root = getRoot();
 
 		if ( root.isEmpty() )
 			return;
 
-		kvOFile file( kvPath );
-		kvString buffer;
+		std::ofstream file( kvPath );
+		std::string buffer;
 
 		saveToBuffer( buffer );
 
 		file << buffer;
 	}
 
-	void KeyValues::saveToBuffer( kvString &out )
+	void KeyValues::saveToBuffer( std::string &out )
 	{
 		KeyValues &root = getRoot();
 
@@ -771,7 +771,7 @@ namespace KV
 		{
 			if ( tabDepth > 0 )
 			{
-				kvString tabs( tabDepth, '\t' );
+				std::string tabs( tabDepth, '\t' );
 				ss << tabs;
 			}
 		};
@@ -828,7 +828,7 @@ namespace KV
 		out = ss.str();
 	}
 
-	void KeyValues::setKeyValue( const kvString &kvValue )
+	void KeyValues::setKeyValue( const std::string &kvValue )
 	{
 		if ( isSection() )
 		{

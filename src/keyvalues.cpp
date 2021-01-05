@@ -330,6 +330,66 @@ namespace KV
 		return keyvalues.count( name );
 	}
 
+	bool KeyValues::getValueAsBool( bool defaultVal /*= false*/ ) const
+	{
+		if ( !value )
+			return defaultVal;
+
+		try
+		{
+			return ( std::stoi( value.value() ) != 0 );
+		}
+		catch ( const std::exception& )
+		{
+			return defaultVal;
+		}
+	}
+
+	int KeyValues::getValueAsInt( int defaultVal /*= 0*/ ) const
+	{
+		if ( !value )
+			return defaultVal;
+
+		try
+		{
+			return std::stoi( value.value() );
+		}
+		catch ( const std::exception& )
+		{
+			return defaultVal;
+		}
+	}
+
+	float KeyValues::getValueAsFloat( float defaultVal /*= 0.0f*/ ) const
+	{
+		if ( !value )
+			return defaultVal;
+
+		try
+		{
+			return std::stof( value.value() );
+		}
+		catch ( const std::exception& )
+		{
+			return defaultVal;
+		}
+	}
+
+	double KeyValues::getValueAsDouble( double defaultVal /*= 0.0*/ ) const
+	{
+		if ( !value )
+			return defaultVal;
+
+		try
+		{
+			return std::stod( value.value() );
+		}
+		catch ( const std::exception& )
+		{
+			return defaultVal;
+		}
+	}
+
 	std::string KeyValues::getKeyValue( const std::string &keyName, size_t index, const std::string &defaultVal /*= ""*/ ) const
 	{
 		const size_t count = keyvalues.count( keyName );
@@ -349,7 +409,6 @@ namespace KV
 		auto it = keyvalues.find( keyName );
 		return it != keyvalues.end() ? it->second->getValue( defaultVal ) : defaultVal;
 	}
-
 
 	KeyValues KeyValues::parseFromFile( const std::string &kvPath, ExpressionEngine expressionEngine /*= ExpressionEngine( true )*/ )
 	{

@@ -139,6 +139,11 @@ namespace KV
 		std::string getKey() const { return ( key ) ? *key : std::string(); }
 		std::string getValue( const std::string &defaultVal = std::string() ) const { return ( value.value_or( defaultVal ) ); }
 
+		bool getValueAsBool( bool defaultVal = false ) const;
+		int getValueAsInt( int defaultVal = 0 ) const;
+		float getValueAsFloat( float defaultVal = 0.0f ) const;
+		double getValueAsDouble( double defaultVal = 0.0 ) const;
+
 		std::string getKeyValue( const std::string &keyName, size_t index, const std::string &defaultVal = std::string() ) const;
 		std::string getKeyValue( const std::string &keyName, const std::string &defaultVal = std::string() ) const;
 
